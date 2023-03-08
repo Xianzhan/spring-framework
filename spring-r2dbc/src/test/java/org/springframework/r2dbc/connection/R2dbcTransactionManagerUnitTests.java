@@ -25,7 +25,6 @@ import io.r2dbc.spi.IsolationLevel;
 import io.r2dbc.spi.R2dbcBadGrammarException;
 import io.r2dbc.spi.R2dbcTimeoutException;
 import io.r2dbc.spi.Statement;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -265,7 +264,7 @@ class R2dbcTransactionManagerUnitTests {
 				.doOnNext(connection -> connection.createStatement("foo")).then()
 				.as(operator::transactional)
 				.as(StepVerifier::create)
-				.verifyError(IllegalTransactionStateException.class);
+				.verifyError(BadSqlGrammarException.class);
 
 		verify(connectionMock).isAutoCommit();
 		verify(connectionMock).beginTransaction(any(io.r2dbc.spi.TransactionDefinition.class));
@@ -318,7 +317,7 @@ class R2dbcTransactionManagerUnitTests {
 			return ConnectionFactoryUtils.getConnection(connectionFactoryMock)
 					.doOnNext(connection -> connection.createStatement("foo")).then();
 		}).as(StepVerifier::create)
-				.verifyError(IllegalTransactionStateException.class);
+				.verifyError(BadSqlGrammarException.class);
 
 		verify(connectionMock).isAutoCommit();
 		verify(connectionMock).beginTransaction(any(io.r2dbc.spi.TransactionDefinition.class));
@@ -345,7 +344,7 @@ class R2dbcTransactionManagerUnitTests {
 						.doOnNext(connection -> {
 							throw new IllegalStateException("Intentional error to trigger rollback");
 						}).then()).as(StepVerifier::create)
-				.verifyErrorSatisfies(e -> Assertions.assertThat(e)
+				.verifyErrorSatisfies(e -> assertThat(e)
 						.isInstanceOf(BadSqlGrammarException.class)
 						.hasCause(new R2dbcBadGrammarException("Rollback should fail"))
 				);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -830,7 +830,7 @@ public class PersistenceAnnotationBeanPostProcessor implements InstantiationAwar
 		private void generateGetEntityManagerMethod(MethodSpec.Builder method, PersistenceElement injectedElement) {
 			String unitName = injectedElement.unitName;
 			Properties properties = injectedElement.properties;
-			method.addJavadoc("Get the '$L' {@link $T}",
+			method.addJavadoc("Get the '$L' {@link $T}.",
 					(StringUtils.hasLength(unitName)) ? unitName : "default",
 					EntityManager.class);
 			method.addModifiers(javax.lang.model.element.Modifier.PUBLIC,

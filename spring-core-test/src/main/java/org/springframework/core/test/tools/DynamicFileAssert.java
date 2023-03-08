@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ public class DynamicFileAssert<A extends DynamicFileAssert<A, F>, F extends Dyna
 	DynamicFileAssert(F actual, Class<?> selfType) {
 		super(actual, selfType);
 	}
+
 
 	/**
 	 * Verify that the actual content is equal to the given one.
