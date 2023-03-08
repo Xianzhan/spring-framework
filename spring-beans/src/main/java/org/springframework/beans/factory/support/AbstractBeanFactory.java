@@ -165,7 +165,12 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	/** Map from bean name to merged RootBeanDefinition. */
 	private final Map<String, RootBeanDefinition> mergedBeanDefinitions = new ConcurrentHashMap<>(256);
 
-	/** Names of beans that have already been created at least once. */
+	/**
+	 * 当 bean 被创建后，则会进入这里。
+	 * @see #markBeanAsCreated
+	 * <p>
+	 * Names of beans that have already been created at least once.
+	 */
 	private final Set<String> alreadyCreated = Collections.newSetFromMap(new ConcurrentHashMap<>(256));
 
 	/** Names of beans that are currently in creation. */
@@ -226,6 +231,11 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	}
 
 	/**
+	 * xianzhan: 创建 bean 并缓存 bean，分三步
+	 * 			 1. createBean: 通过构造方法实例化 bean
+	 * 			 2. populateBean: 填充属性，这一步主要是对 bean 的依赖进行注入（@Autowired）
+	 * 			 3. initializeBean: 初始化 bean，回调一些如 initMethod、InitializingBean 等方法
+	 * <p>
 	 * Return an instance, which may be shared or independent, of the specified bean.
 	 * @param name the name of the bean to retrieve
 	 * @param requiredType the required type of the bean to retrieve
@@ -244,6 +254,11 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 		String beanName = transformedBeanName(name);
 		Object beanInstance;
 
+		// 先从缓存获取，如果不为 null，那就走缓存
+		//     1. 从一级缓存获取
+		//     2. 若一级缓存无，则从二级缓存获取
+		//     3. 若二级缓存无，则从三级缓存获取
+		// allowEarlyReference = true
 		// Eagerly check singleton cache for manually registered singletons.
 		Object sharedInstance = getSingleton(beanName);
 		if (sharedInstance != null && args == null) {
@@ -288,6 +303,8 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			}
 
 			if (!typeCheckOnly) {
+				// 不只是检查类型，标记 bean 已创建
+				// alreadyCreated#add
 				markBeanAsCreated(beanName);
 			}
 
@@ -321,8 +338,16 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 
 				// Create bean instance.
 				if (mbd.isSingleton()) {
+					// getSingleton
+					//     1. 执行 beforeSingletonCreation 方法，标记 bean 正在创建中
+					//     2. 执行 singletonFactory#getObject 方法，即下面的 createBean 方法
+					//     3. 执行 afterSingletonCreation 方法，移除 bean 创建完成
+					//     4. 若 createBean 执行未有异常，则添加到一级缓存，移除二/三级缓存
 					sharedInstance = getSingleton(beanName, () -> {
 						try {
+							// createBean: 通过该方法实例化 bean
+							//     1. 先执行 resolveBeforeInstantiation 创建代理 bean，成功则返回
+							//     2. 若前面未创建 bean，
 							return createBean(beanName, mbd, args);
 						}
 						catch (BeansException ex) {
