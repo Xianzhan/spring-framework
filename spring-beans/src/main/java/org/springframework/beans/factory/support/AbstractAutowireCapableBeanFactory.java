@@ -506,6 +506,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		}
 
 		try {
+			// 尝试根据 InstantiationAwareBeanPostProcessor 创建 bean，例如代理
 			// Give BeanPostProcessors a chance to return a proxy instead of the target bean instance.
 			Object bean = resolveBeforeInstantiation(beanName, mbdToUse);
 			if (bean != null) {
@@ -518,6 +519,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		}
 
 		try {
+			// 创建 bean 对象，并属性注入初始化
 			Object beanInstance = doCreateBean(beanName, mbdToUse, args);
 			if (logger.isTraceEnabled()) {
 				logger.trace("Finished creating instance of bean '" + beanName + "'");
@@ -558,8 +560,10 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			instanceWrapper = this.factoryBeanInstanceCache.remove(beanName);
 		}
 		if (instanceWrapper == null) {
+			// 反射创建 bean 对象，并包装到 BeanWrapper
 			instanceWrapper = createBeanInstance(beanName, mbd, args);
 		}
+		// 获取原始对象
 		Object bean = instanceWrapper.getWrappedInstance();
 		Class<?> beanType = instanceWrapper.getWrappedClass();
 		if (beanType != NullBean.class) {
@@ -580,6 +584,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			}
 		}
 
+		// earlySingletonExposure 表示用于是否 "提前暴露" 原始对象引用，用于解决循环依赖
+		// 对于单例 bean，默认为 true，也可以通过 allowCircularReferences = false 来关闭循环引用
+		// isSingletonCurrentlyInCreation(beanName) 表示当前 bean 必须在创建中才行
 		// Eagerly cache singletons to be able to resolve circular references
 		// even when triggered by lifecycle interfaces like BeanFactoryAware.
 		boolean earlySingletonExposure = (mbd.isSingleton() && this.allowCircularReferences &&
@@ -589,13 +596,24 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 				logger.trace("Eagerly caching bean '" + beanName +
 						"' to allow for resolving potential circular references");
 			}
+			// 若一级缓存无 bean，则添加三级缓存，移除二级缓存
+			// getEarlyBeanReference 作用：
+			//     调用 SmartInstantiationAwareBeanPostProcessor.getEarlyBeanReference() 这个方法，否则啥都不做
+			//     也就是给调用者个机会，自己去实现暴露这个 bean 的应用的逻辑
+			//     比如在 getEarlyBeanReference() 里可以实现 AOP 的逻辑
+			//     参考自动代理创建器 AbstractAutoProxyCreator 实现了这个方法来创建代理对象
+			//     若不需要执行 AOP 的逻辑，直接返回 bean
 			addSingletonFactory(beanName, () -> getEarlyBeanReference(beanName, mbd, bean));
 		}
 
 		// Initialize the bean instance.
 		Object exposedObject = bean;
 		try {
+			// populateBean: 属性注入
 			populateBean(beanName, mbd, instanceWrapper);
+			// initializeBean: 初始化 bean
+			//     1. 调用后置处理器 applyBeanPostProcessorsBeforeInitialization，可能生成代理对象
+			//         - 比如 @Async 的 AsyncAnnotationBeanPostProcessor 它就是在这个时间里生成代理对象的（有坑，请小心使用 @Async）
 			exposedObject = initializeBean(beanName, exposedObject, mbd);
 		}
 		catch (Throwable ex) {
@@ -607,21 +625,30 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			}
 		}
 
+		// earlySingletonExposure： 提前暴露
+		//     若 bean 允许提前暴露，则此处进行检查
 		if (earlySingletonExposure) {
+			// 进入此处，getSingleton 一/二级缓存都还未有该 bean
+			// 且 allowEarlyReference 为 false 不去三级缓存获取 bean
+
 			Object earlySingletonReference = getSingleton(beanName, false);
 			if (earlySingletonReference != null) {
 				if (exposedObject == bean) {
+					// 经过初始化 initializeBean 后，exposedObject 还是未改变，就可以大胆放心返回
 					exposedObject = earlySingletonReference;
 				}
+				// allowRawInjectionDespiteWrapping 默认未 false
 				else if (!this.allowRawInjectionDespiteWrapping && hasDependentBean(beanName)) {
 					String[] dependentBeans = getDependentBeans(beanName);
 					Set<String> actualDependentBeans = new LinkedHashSet<>(dependentBeans.length);
 					for (String dependentBean : dependentBeans) {
 						if (!removeSingletonIfCreatedForTypeCheckOnly(dependentBean)) {
+							// 进入这里表示依赖 bean 还未创建
 							actualDependentBeans.add(dependentBean);
 						}
 					}
 					if (!actualDependentBeans.isEmpty()) {
+						// 依赖的 bean 还未创建，报错
 						throw new BeanCurrentlyInCreationException(beanName,
 								"Bean with name '" + beanName + "' has been injected into other beans [" +
 								StringUtils.collectionToCommaDelimitedString(actualDependentBeans) +
