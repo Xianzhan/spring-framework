@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,14 @@
 package org.springframework.util;
 
 import java.lang.reflect.Array;
+import java.nio.charset.Charset;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.StringJoiner;
+import java.util.TimeZone;
 
 import org.springframework.lang.Nullable;
 
@@ -55,6 +58,9 @@ public abstract class ObjectUtils {
 	private static final String EMPTY_ARRAY = ARRAY_START + ARRAY_END;
 	private static final String ARRAY_ELEMENT_SEPARATOR = ", ";
 	private static final Object[] EMPTY_OBJECT_ARRAY = new Object[0];
+	private static final String NON_EMPTY_ARRAY = ARRAY_START + "..." + ARRAY_END;
+	private static final String EMPTY_COLLECTION = "[]";
+	private static final String NON_EMPTY_COLLECTION = "[...]";
 
 
 	/**
@@ -630,6 +636,7 @@ public abstract class ObjectUtils {
 	 * Returns a {@code "null"} String if {@code obj} is {@code null}.
 	 * @param obj the object to build a String representation for
 	 * @return a String representation of {@code obj}
+	 * @see #nullSafeConciseToString(Object)
 	 */
 	public static String nullSafeToString(@Nullable Object obj) {
 		if (obj == null) {
@@ -883,6 +890,92 @@ public abstract class ObjectUtils {
 			stringJoiner.add(String.valueOf(s));
 		}
 		return stringJoiner.toString();
+	}
+
+	/**
+	 * Generate a null-safe, concise string representation of the supplied object
+	 * as described below.
+	 * <p>Favor this method over {@link #nullSafeToString(Object)} when you need
+	 * the length of the generated string to be limited.
+	 * <p>Returns:
+	 * <ul>
+	 * <li>{@code "null"} if {@code obj} is {@code null}</li>
+	 * <li>{@code"Optional.empty"} if {@code obj} is an empty {@link Optional}</li>
+	 * <li>{@code"Optional[<concise-string>]"} if {@code obj} is a non-empty {@code Optional},
+	 * where {@code <concise-string>} is the result of invoking {@link #nullSafeConciseToString}
+	 * on the object contained in the {@code Optional}</li>
+	 * <li>{@code "{}"} if {@code obj} is an empty array or {@link Map}</li>
+	 * <li>{@code "{...}"} if {@code obj} is a non-empty array or {@link Map}</li>
+	 * <li>{@code "[]"} if {@code obj} is an empty {@link Collection}</li>
+	 * <li>{@code "[...]"} if {@code obj} is a non-empty {@link Collection}</li>
+	 * <li>{@linkplain Class#getName() Class name} if {@code obj} is a {@link Class}</li>
+	 * <li>{@linkplain Charset#name() Charset name} if {@code obj} is a {@link Charset}</li>
+	 * <li>{@linkplain TimeZone#getID() TimeZone ID} if {@code obj} is a {@link TimeZone}</li>
+	 * <li>{@linkplain ZoneId#getId() Zone ID} if {@code obj} is a {@link ZoneId}</li>
+	 * <li>Potentially {@linkplain StringUtils#truncate(CharSequence) truncated string}
+	 * if {@code obj} is a {@link String} or {@link CharSequence}</li>
+	 * <li>Potentially {@linkplain StringUtils#truncate(CharSequence) truncated string}
+	 * if {@code obj} is a <em>simple value type</em> whose {@code toString()} method
+	 * returns a non-null value</li>
+	 * <li>Otherwise, a string representation of the object's type name concatenated
+	 * with {@code "@"} and a hex string form of the object's identity hash code</li>
+	 * </ul>
+	 * <p>In the context of this method, a <em>simple value type</em> is any of the following:
+	 * primitive wrapper (excluding {@link Void}), {@link Enum}, {@link Number},
+	 * {@link java.util.Date Date}, {@link java.time.temporal.Temporal Temporal},
+	 * {@link java.io.File File}, {@link java.nio.file.Path Path},
+	 * {@link java.net.URI URI}, {@link java.net.URL URL},
+	 * {@link java.net.InetAddress InetAddress}, {@link java.util.Currency Currency},
+	 * {@link java.util.Locale Locale}, {@link java.util.UUID UUID},
+	 * {@link java.util.regex.Pattern Pattern}.
+	 * @param obj the object to build a string representation for
+	 * @return a concise string representation of the supplied object
+	 * @since 5.3.27
+	 * @see #nullSafeToString(Object)
+	 * @see StringUtils#truncate(CharSequence)
+	 * @see ClassUtils#isSimpleValueType(Class)
+	 */
+	public static String nullSafeConciseToString(@Nullable Object obj) {
+		if (obj == null) {
+			return "null";
+		}
+		if (obj instanceof Optional<?> optional) {
+			return (optional.isEmpty() ? "Optional.empty" :
+				"Optional[%s]".formatted(nullSafeConciseToString(optional.get())));
+		}
+		if (obj.getClass().isArray()) {
+			return (Array.getLength(obj) == 0 ? EMPTY_ARRAY : NON_EMPTY_ARRAY);
+		}
+		if (obj instanceof Collection<?> collection) {
+			return (collection.isEmpty() ? EMPTY_COLLECTION : NON_EMPTY_COLLECTION);
+		}
+		if (obj instanceof Map<?, ?> map) {
+			// EMPTY_ARRAY and NON_EMPTY_ARRAY are also used for maps.
+			return (map.isEmpty() ? EMPTY_ARRAY : NON_EMPTY_ARRAY);
+		}
+		if (obj instanceof Class<?> clazz) {
+			return clazz.getName();
+		}
+		if (obj instanceof Charset charset) {
+			return charset.name();
+		}
+		if (obj instanceof TimeZone timeZone) {
+			return timeZone.getID();
+		}
+		if (obj instanceof ZoneId zoneId) {
+			return zoneId.getId();
+		}
+		if (obj instanceof CharSequence charSequence) {
+			return StringUtils.truncate(charSequence);
+		}
+		Class<?> type = obj.getClass();
+		if (ClassUtils.isSimpleValueType(type)) {
+			String str = obj.toString();
+			if (str != null) {
+				return StringUtils.truncate(str);
+			}
+		}
+		return type.getTypeName() + "@" + getIdentityHexString(obj);
 	}
 
 }

@@ -214,7 +214,7 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 	@Override
 	public void afterSingletonsInstantiated() {
 		if (getCacheResolver() == null) {
-			// Lazily initialize cache resolver via default cache manager...
+			// Lazily initialize cache resolver via default cache manager
 			Assert.state(this.beanFactory != null, "CacheResolver or BeanFactory must be set on cache aspect");
 			try {
 				setCacheManager(this.beanFactory.getBean(CacheManager.class));
@@ -307,22 +307,22 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 	}
 
 	/**
-	 * Return a bean with the specified name and type. Used to resolve services that
-	 * are referenced by name in a {@link CacheOperation}.
-	 * @param beanName the name of the bean, as defined by the operation
-	 * @param expectedType type for the bean
-	 * @return the bean matching that name
+	 * Retrieve a bean with the specified name and type.
+	 * Used to resolve services that are referenced by name in a {@link CacheOperation}.
+	 * @param name the name of the bean, as defined by the cache operation
+	 * @param serviceType the type expected by the operation's service reference
+	 * @return the bean matching the expected type, qualified by the given name
 	 * @throws org.springframework.beans.factory.NoSuchBeanDefinitionException if such bean does not exist
 	 * @see CacheOperation#getKeyGenerator()
 	 * @see CacheOperation#getCacheManager()
 	 * @see CacheOperation#getCacheResolver()
 	 */
-	protected <T> T getBean(String beanName, Class<T> expectedType) {
+	protected <T> T getBean(String name, Class<T> serviceType) {
 		if (this.beanFactory == null) {
 			throw new IllegalStateException(
-					"BeanFactory must be set on cache aspect for " + expectedType.getSimpleName() + " retrieval");
+					"BeanFactory must be set on cache aspect for " + serviceType.getSimpleName() + " retrieval");
 		}
-		return BeanFactoryAnnotationUtils.qualifiedBeanOfType(this.beanFactory, expectedType, beanName);
+		return BeanFactoryAnnotationUtils.qualifiedBeanOfType(this.beanFactory, serviceType, name);
 	}
 
 	/**
@@ -388,11 +388,10 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 				}
 			}
 			else {
-				// No caching required, only call the underlying method
+				// No caching required, just call the underlying method
 				return invokeOperation(invoker);
 			}
 		}
-
 
 		// Process any early evictions
 		processCacheEvicts(contexts.get(CacheEvictOperation.class), true,
@@ -400,13 +399,6 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 
 		// Check if we have a cached item matching the conditions
 		Cache.ValueWrapper cacheHit = findCachedItem(contexts.get(CacheableOperation.class));
-
-		// Collect puts from any @Cacheable miss, if no cached item is found
-		List<CachePutRequest> cachePutRequests = new ArrayList<>();
-		if (cacheHit == null) {
-			collectPutRequests(contexts.get(CacheableOperation.class),
-					CacheOperationExpressionEvaluator.NO_RESULT, cachePutRequests);
-		}
 
 		Object cacheValue;
 		Object returnValue;
@@ -420,6 +412,12 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 			// Invoke the method if we don't have a cache hit
 			returnValue = invokeOperation(invoker);
 			cacheValue = unwrapReturnValue(returnValue);
+		}
+
+		// Collect puts from any @Cacheable miss, if no cached item is found
+		List<CachePutRequest> cachePutRequests = new ArrayList<>();
+		if (cacheHit == null) {
+			collectPutRequests(contexts.get(CacheableOperation.class), cacheValue, cachePutRequests);
 		}
 
 		// Collect any explicit @CachePuts
@@ -558,7 +556,7 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 			@Nullable Object result, Collection<CachePutRequest> putRequests) {
 
 		for (CacheOperationContext context : contexts) {
-			if (isConditionPassing(context, result)) {
+			if (isConditionPassing(context, result) && context.canPutToCache(result)) {
 				Object key = generateKey(context, result);
 				putRequests.add(new CachePutRequest(context, key));
 			}
@@ -641,21 +639,21 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 			if (syncEnabled) {
 				if (this.contexts.size() > 1) {
 					throw new IllegalStateException(
-							"@Cacheable(sync=true) cannot be combined with other cache operations on '" + method + "'");
+							"A sync=true operation cannot be combined with other cache operations on '" + method + "'");
 				}
 				if (cacheOperationContexts.size() > 1) {
 					throw new IllegalStateException(
-							"Only one @Cacheable(sync=true) entry is allowed on '" + method + "'");
+							"Only one sync=true operation is allowed on '" + method + "'");
 				}
 				CacheOperationContext cacheOperationContext = cacheOperationContexts.iterator().next();
-				CacheableOperation operation = (CacheableOperation) cacheOperationContext.getOperation();
+				CacheOperation operation = cacheOperationContext.getOperation();
 				if (cacheOperationContext.getCaches().size() > 1) {
 					throw new IllegalStateException(
-							"@Cacheable(sync=true) only allows a single cache on '" + operation + "'");
+							"A sync=true operation is restricted to a single cache on '" + operation + "'");
 				}
-				if (StringUtils.hasText(operation.getUnless())) {
+				if (operation instanceof CacheableOperation cacheable && StringUtils.hasText(cacheable.getUnless())) {
 					throw new IllegalStateException(
-							"@Cacheable(sync=true) does not support unless attribute on '" + operation + "'");
+							"A sync=true operation does not support the unless attribute on '" + operation + "'");
 				}
 				return true;
 			}
@@ -832,10 +830,8 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 		}
 
 		public void apply(@Nullable Object result) {
-			if (this.context.canPutToCache(result)) {
-				for (Cache cache : this.context.getCaches()) {
-					doPut(cache, this.key, result);
-				}
+			for (Cache cache : this.context.getCaches()) {
+				doPut(cache, this.key, result);
 			}
 		}
 	}
@@ -854,14 +850,9 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 
 		@Override
 		public boolean equals(@Nullable Object other) {
-			if (this == other) {
-				return true;
-			}
-			if (!(other instanceof CacheOperationCacheKey otherKey)) {
-				return false;
-			}
-			return (this.cacheOperation.equals(otherKey.cacheOperation) &&
-					this.methodCacheKey.equals(otherKey.methodCacheKey));
+			return (this == other || (other instanceof CacheOperationCacheKey that &&
+					this.cacheOperation.equals(that.cacheOperation) &&
+					this.methodCacheKey.equals(that.methodCacheKey)));
 		}
 
 		@Override
@@ -884,13 +875,13 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 		}
 	}
 
+
 	/**
 	 * Internal holder class for recording that a cache method was invoked.
 	 */
 	private static class InvocationAwareResult {
 
 		boolean invoked;
-
 	}
 
 }

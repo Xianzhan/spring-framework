@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -390,7 +390,8 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 	@Override
 	@Nullable
 	public String getBeanClassName() {
-		return (this.beanClass instanceof Class<?> clazz ? clazz.getName() : (String) this.beanClass);
+		Object beanClassObject = this.beanClass;  // defensive access to volatile beanClass field
+		return (beanClassObject instanceof Class<?> clazz ? clazz.getName() : (String) beanClassObject);
 	}
 
 	/**
@@ -423,7 +424,7 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 	 * @see #resolveBeanClass(ClassLoader)
 	 */
 	public Class<?> getBeanClass() throws IllegalStateException {
-		Object beanClassObject = this.beanClass;
+		Object beanClassObject = this.beanClass;  // defensive access to volatile beanClass field
 		if (beanClassObject == null) {
 			throw new IllegalStateException("No bean class specified on bean definition");
 		}
@@ -853,10 +854,12 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 	 */
 	@Override
 	public ConstructorArgumentValues getConstructorArgumentValues() {
-		if (this.constructorArgumentValues == null) {
-			this.constructorArgumentValues = new ConstructorArgumentValues();
+		ConstructorArgumentValues cav = this.constructorArgumentValues;
+		if (cav == null) {
+			cav = new ConstructorArgumentValues();
+			this.constructorArgumentValues = cav;
 		}
-		return this.constructorArgumentValues;
+		return cav;
 	}
 
 	/**
@@ -879,10 +882,12 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 	 */
 	@Override
 	public MutablePropertyValues getPropertyValues() {
-		if (this.propertyValues == null) {
-			this.propertyValues = new MutablePropertyValues();
+		MutablePropertyValues pvs = this.propertyValues;
+		if (pvs == null) {
+			pvs = new MutablePropertyValues();
+			this.propertyValues = pvs;
 		}
-		return this.propertyValues;
+		return pvs;
 	}
 
 	/**
@@ -1206,13 +1211,8 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 
 	@Override
 	public boolean equals(@Nullable Object other) {
-		if (this == other) {
-			return true;
-		}
-		if (!(other instanceof AbstractBeanDefinition that)) {
-			return false;
-		}
-		return (ObjectUtils.nullSafeEquals(getBeanClassName(), that.getBeanClassName()) &&
+		return (this == other || (other instanceof AbstractBeanDefinition that &&
+				ObjectUtils.nullSafeEquals(getBeanClassName(), that.getBeanClassName()) &&
 				ObjectUtils.nullSafeEquals(this.scope, that.scope) &&
 				this.abstractFlag == that.abstractFlag &&
 				this.lazyInit == that.lazyInit &&
@@ -1235,7 +1235,7 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 				this.enforceDestroyMethod == that.enforceDestroyMethod &&
 				this.synthetic == that.synthetic &&
 				this.role == that.role &&
-				super.equals(other));
+				super.equals(other)));
 	}
 
 	private boolean equalsConstructorArgumentValues(AbstractBeanDefinition other) {

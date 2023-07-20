@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,7 @@ public final class EmptyTargetSource implements TargetSource, Serializable {
 	// Instance implementation
 	//---------------------------------------------------------------------
 
+	@Nullable
 	private final Class<?> targetClass;
 
 	private final boolean isStatic;
@@ -131,14 +132,10 @@ public final class EmptyTargetSource implements TargetSource, Serializable {
 	}
 
 	@Override
-	public boolean equals(Object other) {
-		if (this == other) {
-			return true;
-		}
-		if (!(other instanceof EmptyTargetSource otherTs)) {
-			return false;
-		}
-		return (ObjectUtils.nullSafeEquals(this.targetClass, otherTs.targetClass) && this.isStatic == otherTs.isStatic);
+	public boolean equals(@Nullable Object other) {
+		return (this == other || (other instanceof EmptyTargetSource that &&
+				ObjectUtils.nullSafeEquals(this.targetClass, that.targetClass) &&
+				this.isStatic == that.isStatic));
 	}
 
 	@Override

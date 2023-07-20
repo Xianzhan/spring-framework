@@ -26,11 +26,12 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.testfixture.beans.TestBean;
 import org.springframework.core.MethodParameter;
+import org.springframework.core.ResolvableType;
 import org.springframework.core.annotation.SynthesizingMethodParameter;
 import org.springframework.format.support.DefaultFormattingConversionService;
-import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.Errors;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.SessionAttributes;
@@ -51,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -109,7 +110,7 @@ public class ModelAttributeMethodProcessorTests {
 
 
 	@Test
-	public void supportedParameters() throws Exception {
+	public void supportedParameters() {
 		assertThat(this.processor.supportsParameter(this.paramNamedValidModelAttr)).isTrue();
 		assertThat(this.processor.supportsParameter(this.paramModelAttr)).isTrue();
 
@@ -119,8 +120,8 @@ public class ModelAttributeMethodProcessorTests {
 	}
 
 	@Test
-	public void supportedParametersInDefaultResolutionMode() throws Exception {
-		processor = new ModelAttributeMethodProcessor(true);
+	public void supportedParametersInDefaultResolutionMode() {
+		this.processor = new ModelAttributeMethodProcessor(true);
 
 		// Only non-simple types, even if not annotated
 		assertThat(this.processor.supportsParameter(this.paramNamedValidModelAttr)).isTrue();
@@ -132,21 +133,21 @@ public class ModelAttributeMethodProcessorTests {
 	}
 
 	@Test
-	public void supportedReturnTypes() throws Exception {
-		processor = new ModelAttributeMethodProcessor(false);
+	public void supportedReturnTypes() {
+		this.processor = new ModelAttributeMethodProcessor(false);
 		assertThat(this.processor.supportsReturnType(returnParamNamedModelAttr)).isTrue();
 		assertThat(this.processor.supportsReturnType(returnParamNonSimpleType)).isFalse();
 	}
 
 	@Test
-	public void supportedReturnTypesInDefaultResolutionMode() throws Exception {
-		processor = new ModelAttributeMethodProcessor(true);
+	public void supportedReturnTypesInDefaultResolutionMode() {
+		this.processor = new ModelAttributeMethodProcessor(true);
 		assertThat(this.processor.supportsReturnType(returnParamNamedModelAttr)).isTrue();
 		assertThat(this.processor.supportsReturnType(returnParamNonSimpleType)).isTrue();
 	}
 
 	@Test
-	public void bindExceptionRequired() throws Exception {
+	public void bindExceptionRequired() {
 		assertThat(this.processor.isBindExceptionRequired(null, this.paramNonSimpleType)).isTrue();
 		assertThat(this.processor.isBindExceptionRequired(null, this.paramNamedValidModelAttr)).isFalse();
 	}
@@ -161,11 +162,13 @@ public class ModelAttributeMethodProcessorTests {
 	@Test
 	public void resolveArgumentViaDefaultConstructor() throws Exception {
 		WebDataBinder dataBinder = new WebRequestDataBinder(null);
+		dataBinder.setTargetType(ResolvableType.forMethodParameter(this.paramNamedValidModelAttr));
+
 		WebDataBinderFactory factory = mock();
-		given(factory.createBinder(any(), notNull(), eq("attrName"))).willReturn(dataBinder);
+		given(factory.createBinder(any(), isNull(), eq("attrName"), any())).willReturn(dataBinder);
 
 		this.processor.resolveArgument(this.paramNamedValidModelAttr, this.container, this.request, factory);
-		verify(factory).createBinder(any(), notNull(), eq("attrName"));
+		verify(factory).createBinder(any(), isNull(), eq("attrName"), any());
 	}
 
 	@Test
@@ -176,7 +179,8 @@ public class ModelAttributeMethodProcessorTests {
 
 		StubRequestDataBinder dataBinder = new StubRequestDataBinder(target, name);
 		WebDataBinderFactory factory = mock();
-		given(factory.createBinder(this.request, target, name)).willReturn(dataBinder);
+		ResolvableType type = ResolvableType.forMethodParameter(this.paramNamedValidModelAttr);
+		given(factory.createBinder(this.request, target, name, type)).willReturn(dataBinder);
 
 		this.processor.resolveArgument(this.paramNamedValidModelAttr, this.container, this.request, factory);
 
@@ -195,7 +199,8 @@ public class ModelAttributeMethodProcessorTests {
 
 		StubRequestDataBinder dataBinder = new StubRequestDataBinder(target, name);
 		WebDataBinderFactory factory = mock();
-		given(factory.createBinder(this.request, target, name)).willReturn(dataBinder);
+		ResolvableType type = ResolvableType.forMethodParameter(this.paramNamedValidModelAttr);
+		given(factory.createBinder(this.request, target, name, type)).willReturn(dataBinder);
 
 		this.processor.resolveArgument(this.paramNamedValidModelAttr, this.container, this.request, factory);
 
@@ -211,7 +216,8 @@ public class ModelAttributeMethodProcessorTests {
 
 		StubRequestDataBinder dataBinder = new StubRequestDataBinder(target, name);
 		WebDataBinderFactory factory = mock();
-		given(factory.createBinder(this.request, target, name)).willReturn(dataBinder);
+		ResolvableType type = ResolvableType.forMethodParameter(this.paramBindingDisabledAttr);
+		given(factory.createBinder(this.request, target, name, type)).willReturn(dataBinder);
 
 		this.processor.resolveArgument(this.paramBindingDisabledAttr, this.container, this.request, factory);
 
@@ -227,12 +233,15 @@ public class ModelAttributeMethodProcessorTests {
 
 		StubRequestDataBinder dataBinder = new StubRequestDataBinder(target, name);
 		dataBinder.getBindingResult().reject("error");
-		WebDataBinderFactory binderFactory = mock();
-		given(binderFactory.createBinder(this.request, target, name)).willReturn(dataBinder);
 
-		assertThatExceptionOfType(BindException.class).isThrownBy(() ->
+		WebDataBinderFactory binderFactory = mock();
+		ResolvableType type = ResolvableType.forMethodParameter(this.paramNonSimpleType);
+		given(binderFactory.createBinder(this.request, target, name, type)).willReturn(dataBinder);
+
+		assertThatExceptionOfType(MethodArgumentNotValidException.class).isThrownBy(() ->
 				this.processor.resolveArgument(this.paramNonSimpleType, this.container, this.request, binderFactory));
-		verify(binderFactory).createBinder(this.request, target, name);
+
+		verify(binderFactory).createBinder(this.request, target, name, type);
 	}
 
 	@Test  // SPR-9378
@@ -247,7 +256,8 @@ public class ModelAttributeMethodProcessorTests {
 
 		StubRequestDataBinder dataBinder = new StubRequestDataBinder(testBean, name);
 		WebDataBinderFactory binderFactory = mock();
-		given(binderFactory.createBinder(this.request, testBean, name)).willReturn(dataBinder);
+		ResolvableType type = ResolvableType.forMethodParameter(this.paramModelAttr);
+		given(binderFactory.createBinder(this.request, testBean, name, type)).willReturn(dataBinder);
 
 		this.processor.resolveArgument(this.paramModelAttr, this.container, this.request, binderFactory);
 
@@ -276,9 +286,10 @@ public class ModelAttributeMethodProcessorTests {
 		ServletWebRequest requestWithParam = new ServletWebRequest(mockRequest);
 
 		WebDataBinderFactory factory = mock();
-		given(factory.createBinder(any(), any(), eq("testBeanWithConstructorArgs")))
+		given(factory.createBinder(any(), any(), eq("testBeanWithConstructorArgs"), any()))
 				.willAnswer(invocation -> {
 					WebRequestDataBinder binder = new WebRequestDataBinder(invocation.getArgument(1));
+					binder.setTargetType(ResolvableType.forMethodParameter(this.beanWithConstructorArgs));
 					// Add conversion service which will convert "1,2" to a list
 					binder.setConversionService(new DefaultFormattingConversionService());
 					return binder;
@@ -295,10 +306,11 @@ public class ModelAttributeMethodProcessorTests {
 
 		WebDataBinder dataBinder = new WebRequestDataBinder(target);
 		WebDataBinderFactory factory = mock();
-		given(factory.createBinder(this.request, target, expectedAttrName)).willReturn(dataBinder);
+		ResolvableType type = ResolvableType.forMethodParameter(param);
+		given(factory.createBinder(this.request, target, expectedAttrName, type)).willReturn(dataBinder);
 
 		this.processor.resolveArgument(param, this.container, this.request, factory);
-		verify(factory).createBinder(this.request, target, expectedAttrName);
+		verify(factory).createBinder(this.request, target, expectedAttrName, type);
 	}
 
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,9 +39,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RequestParamArgumentResolverTests {
 
-	private final TestHttpClientAdapter client = new TestHttpClientAdapter();
+	private final TestExchangeAdapter client = new TestExchangeAdapter();
 
-	private final Service service = HttpServiceProxyFactory.builder(this.client).build().createClient(Service.class);
+	private final Service service =
+			HttpServiceProxyFactory.builderFor(this.client).build().createClient(Service.class);
 
 
 	@Test
@@ -50,7 +51,7 @@ class RequestParamArgumentResolverTests {
 		this.service.postForm("value 1", "value 2");
 
 		Object body = this.client.getRequestValues().getBodyValue();
-		assertThat(body).isNotNull().isInstanceOf(MultiValueMap.class);
+		assertThat(body).isInstanceOf(MultiValueMap.class);
 		assertThat((MultiValueMap<String, String>) body).hasSize(2)
 				.containsEntry("param1", List.of("value 1"))
 				.containsEntry("param2", List.of("value 2"));

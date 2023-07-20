@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2022 the original author or authors.
+ * Copyright 2012-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.sql.Savepoint;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -240,7 +241,7 @@ public class MvcUriComponentsBuilderTests {
 		assertThat(uriComponents.toUriString()).isEqualTo("http://localhost/");
 	}
 
-	@Test // gh-29897
+	@Test  // gh-29897
 	public void fromMethodNameInUnmappedControllerMethod() {
 		UriComponents uriComponents = fromMethodName(UnmappedControllerMethod.class, "getMethod").build();
 
@@ -293,6 +294,14 @@ public class MvcUriComponentsBuilderTests {
 	}
 
 	@Test
+	public void fromMethodCallOnSubclass() {
+		UriComponents uriComponents = fromMethodCall(on(ExtendedController.class).myMethod(null)).build();
+
+		assertThat(uriComponents.toUriString()).startsWith("http://localhost");
+		assertThat(uriComponents.toUriString()).endsWith("/extended/else");
+	}
+
+	@Test
 	public void fromMethodCallPlain() {
 		UriComponents uriComponents = fromMethodCall(on(ControllerWithMethods.class).myMethod(null)).build();
 
@@ -301,11 +310,27 @@ public class MvcUriComponentsBuilderTests {
 	}
 
 	@Test
-	public void fromMethodCallOnSubclass() {
-		UriComponents uriComponents = fromMethodCall(on(ExtendedController.class).myMethod(null)).build();
+	public void fromMethodCallPlainWithNoArguments() {
+		UriComponents uriComponents = fromMethodCall(on(ControllerWithMethods.class).myMethod()).build();
 
 		assertThat(uriComponents.toUriString()).startsWith("http://localhost");
-		assertThat(uriComponents.toUriString()).endsWith("/extended/else");
+		assertThat(uriComponents.toUriString()).endsWith("/something/noarg");
+	}
+
+	@Test
+	public void fromMethodCallPlainOnInterface() {
+		UriComponents uriComponents = fromMethodCall(on(ControllerInterface.class).myMethod(null)).build();
+
+		assertThat(uriComponents.toUriString()).startsWith("http://localhost");
+		assertThat(uriComponents.toUriString()).endsWith("/something/else");
+	}
+
+	@Test
+	public void fromMethodCallPlainWithNoArgumentsOnInterface() {
+		UriComponents uriComponents = fromMethodCall(on(ControllerInterface.class).myMethod()).build();
+
+		assertThat(uriComponents.toUriString()).startsWith("http://localhost");
+		assertThat(uriComponents.toUriString()).endsWith("/something/noarg");
 	}
 
 	@Test
@@ -384,7 +409,7 @@ public class MvcUriComponentsBuilderTests {
 		assertThat(uriComponents.encode().toUri().toString()).isEqualTo("http://localhost/hotels/42/bookings/21");
 	}
 
-	@Test // SPR-16710
+	@Test  // SPR-16710
 	public void fromMethodCallWithStringReturnType() {
 		assertThatIllegalStateException().isThrownBy(() -> {
 				UriComponents uriComponents = fromMethodCall(
@@ -401,9 +426,24 @@ public class MvcUriComponentsBuilderTests {
 		assertThat(uriComponents.encode().toUri().toString()).isEqualTo("http://localhost/hotels/42/bookings/21");
 	}
 
+	@Test  // gh-30210
+	public void fromMethodCallWithCharSequenceReturnType() {
+		UriComponents uriComponents = fromMethodCall(
+				on(BookingControllerWithCharSequence.class).getBooking(21L)).buildAndExpand(42);
+
+		assertThat(uriComponents.encode().toUri().toString()).isEqualTo("http://localhost/hotels/42/bookings/21");
+	}
+
+	@Test  // gh-30210
+	public void fromMethodCallWithJdbc30115ReturnType() {
+		UriComponents uriComponents = fromMethodCall(
+				on(BookingControllerWithJdbcSavepoint.class).getBooking(21L)).buildAndExpand(42);
+
+		assertThat(uriComponents.encode().toUri().toString()).isEqualTo("http://localhost/hotels/42/bookings/21");
+	}
+
 	@Test
 	public void fromMappingNamePlain() {
-
 		initWebApplicationContext(WebConfig.class);
 
 		this.request.setServerName("example.org");
@@ -417,7 +457,6 @@ public class MvcUriComponentsBuilderTests {
 
 	@Test
 	public void fromMappingNameWithCustomBaseUrl() {
-
 		initWebApplicationContext(WebConfig.class);
 
 		UriComponentsBuilder baseUrl = UriComponentsBuilder.fromUriString("https://example.org:9999/base");
@@ -426,9 +465,8 @@ public class MvcUriComponentsBuilderTests {
 		assertThat(url).isEqualTo("https://example.org:9999/base/people/123/addresses/DE");
 	}
 
-	@Test // SPR-17027
+	@Test  // SPR-17027
 	public void fromMappingNameWithEncoding() {
-
 		initWebApplicationContext(WebConfig.class);
 
 		this.request.setServerName("example.org");
@@ -442,7 +480,6 @@ public class MvcUriComponentsBuilderTests {
 
 	@Test
 	public void fromMappingNameWithPathWithoutLeadingSlash() {
-
 		initWebApplicationContext(PathWithoutLeadingSlashConfig.class);
 
 		this.request.setServerName("example.org");
@@ -456,7 +493,6 @@ public class MvcUriComponentsBuilderTests {
 
 	@Test
 	public void fromControllerWithPrefix() {
-
 		initWebApplicationContext(PathPrefixWebConfig.class);
 
 		this.request.setScheme("https");
@@ -470,7 +506,6 @@ public class MvcUriComponentsBuilderTests {
 
 	@Test
 	public void fromMethodWithPrefix() {
-
 		initWebApplicationContext(PathPrefixWebConfig.class);
 
 		this.request.setScheme("https");
@@ -564,6 +599,11 @@ public class MvcUriComponentsBuilderTests {
 			return null;
 		}
 
+		@RequestMapping("/noarg")
+		HttpEntity<Void> myMethod() {
+			return null;
+		}
+
 		@RequestMapping("/{id}/foo")
 		HttpEntity<Void> methodWithPathVariable(@PathVariable String id) {
 			return null;
@@ -602,6 +642,17 @@ public class MvcUriComponentsBuilderTests {
 	@RequestMapping("/extended")
 	@SuppressWarnings("WeakerAccess")
 	static class ExtendedController extends ControllerWithMethods {
+	}
+
+
+	@RequestMapping("/something")
+	public interface ControllerInterface {
+
+		@RequestMapping("/else")
+		HttpEntity<Void> myMethod(@RequestBody Object payload);
+
+		@RequestMapping("/noarg")
+		HttpEntity<Void> myMethod();
 	}
 
 
@@ -721,6 +772,28 @@ public class MvcUriComponentsBuilderTests {
 		@GetMapping("/bookings/{booking}")
 		public String getBooking(@PathVariable Long booking) {
 			return "url";
+		}
+	}
+
+
+	@Controller
+	@RequestMapping("/hotels/{hotel}")
+	static class BookingControllerWithCharSequence {
+
+		@GetMapping("/bookings/{booking}")
+		public CharSequence getBooking(@PathVariable Long booking) {
+			return "url";
+		}
+	}
+
+
+	@Controller
+	@RequestMapping("/hotels/{hotel}")
+	static class BookingControllerWithJdbcSavepoint {
+
+		@GetMapping("/bookings/{booking}")
+		public Savepoint getBooking(@PathVariable Long booking) {
+			return null;
 		}
 	}
 

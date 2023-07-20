@@ -42,6 +42,7 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.Part;
 
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.ResolvableType;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpMethod;
@@ -52,7 +53,11 @@ import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.validation.BindException;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.bind.ServletRequestDataBinder;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.util.UriBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -115,7 +120,7 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 	@Override
 	public ServerRequest.Builder header(String headerName, String... headerValues) {
-		Assert.notNull(headerName, "Header Name must not be null");
+		Assert.notNull(headerName, "Header name must not be null");
 		for (String headerValue : headerValues) {
 			this.headers.add(headerName, headerValue);
 		}
@@ -124,14 +129,14 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 	@Override
 	public ServerRequest.Builder headers(Consumer<HttpHeaders> headersConsumer) {
-		Assert.notNull(headersConsumer, "Header Consumer must not be null");
+		Assert.notNull(headersConsumer, "Headers consumer must not be null");
 		headersConsumer.accept(this.headers);
 		return this;
 	}
 
 	@Override
 	public ServerRequest.Builder cookie(String name, String... values) {
-		Assert.notNull(name, "Cookie Name must not be null");
+		Assert.notNull(name, "Cookie name must not be null");
 		for (String value : values) {
 			this.cookies.add(name, new Cookie(name, value));
 		}
@@ -140,41 +145,41 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 	@Override
 	public ServerRequest.Builder cookies(Consumer<MultiValueMap<String, Cookie>> cookiesConsumer) {
-		Assert.notNull(cookiesConsumer, "Cookie Consumer must not be null");
+		Assert.notNull(cookiesConsumer, "Cookies consumer must not be null");
 		cookiesConsumer.accept(this.cookies);
 		return this;
 	}
 
 	@Override
 	public ServerRequest.Builder body(byte[] body) {
-		Assert.notNull(body, "body must not be null");
+		Assert.notNull(body, "Body must not be null");
 		this.body = body;
 		return this;
 	}
 
 	@Override
 	public ServerRequest.Builder body(String body) {
-		Assert.notNull(body, "body must not be null");
+		Assert.notNull(body, "Body must not be null");
 		return body(body.getBytes(StandardCharsets.UTF_8));
 	}
 
 	@Override
 	public ServerRequest.Builder attribute(String name, Object value) {
-		Assert.notNull(name, "name must not be null");
+		Assert.notNull(name, "Name must not be null");
 		this.attributes.put(name, value);
 		return this;
 	}
 
 	@Override
 	public ServerRequest.Builder attributes(Consumer<Map<String, Object>> attributesConsumer) {
-		Assert.notNull(attributesConsumer, "AttributesConsumer must not be null");
+		Assert.notNull(attributesConsumer, "Attributes consumer must not be null");
 		attributesConsumer.accept(this.attributes);
 		return this;
 	}
 
 	@Override
 	public ServerRequest.Builder param(String name, String... values) {
-		Assert.notNull(name, "name must not be null");
+		Assert.notNull(name, "Name must not be null");
 		for (String value : values) {
 			this.params.add(name, value);
 		}
@@ -183,7 +188,7 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 	@Override
 	public ServerRequest.Builder params(Consumer<MultiValueMap<String, String>> paramsConsumer) {
-		Assert.notNull(paramsConsumer, "paramsConsumer must not be null");
+		Assert.notNull(paramsConsumer, "Parameters consumer must not be null");
 		paramsConsumer.accept(this.params);
 		return this;
 	}
@@ -321,6 +326,35 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 				}
 			}
 			throw new HttpMediaTypeNotSupportedException(contentType, Collections.emptyList(), method());
+		}
+
+		@Override
+		@SuppressWarnings("unchecked")
+		public <T> T bind(Class<T> bindType, Consumer<WebDataBinder> dataBinderCustomizer) throws BindException {
+			Assert.notNull(bindType, "BindType must not be null");
+			Assert.notNull(dataBinderCustomizer, "DataBinderCustomizer must not be null");
+
+			ServletRequestDataBinder dataBinder = new ServletRequestDataBinder(null);
+			dataBinder.setTargetType(ResolvableType.forClass(bindType));
+			dataBinderCustomizer.accept(dataBinder);
+
+			HttpServletRequest servletRequest = servletRequest();
+			dataBinder.construct(servletRequest);
+			dataBinder.bind(servletRequest);
+
+			BindingResult bindingResult = dataBinder.getBindingResult();
+			if (bindingResult.hasErrors()) {
+				throw new BindException(bindingResult);
+			}
+			else {
+				T result = (T) bindingResult.getTarget();
+				if (result != null) {
+					return result;
+				}
+				else {
+					throw new IllegalStateException("Binding result has neither target nor errors");
+				}
+			}
 		}
 
 		@Override

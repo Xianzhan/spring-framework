@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,10 @@ import java.util.regex.Pattern;
 
 import org.springframework.http.HttpCookie;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.server.RequestPath;
 import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -49,6 +51,8 @@ public abstract class AbstractServerHttpRequest implements ServerHttpRequest {
 
 	private final HttpHeaders headers;
 
+	private final HttpMethod method;
+
 	@Nullable
 	private MultiValueMap<String, String> queryParams;
 
@@ -66,25 +70,21 @@ public abstract class AbstractServerHttpRequest implements ServerHttpRequest {
 
 
 	/**
-	 * Constructor with the URI and headers for the request.
+	 * Constructor with the method, URI and headers for the request.
+	 * @param method the HTTP method for the request
 	 * @param uri the URI for the request
 	 * @param contextPath the context path for the request
 	 * @param headers the headers for the request (as {@link MultiValueMap})
-	 * @since 5.3
+	 * @since 6.0.8
 	 */
-	public AbstractServerHttpRequest(URI uri, @Nullable String contextPath, MultiValueMap<String, String> headers) {
-		this.uri = uri;
-		this.path = RequestPath.parse(uri, contextPath);
-		this.headers = HttpHeaders.readOnlyHttpHeaders(headers);
-	}
+	public AbstractServerHttpRequest(HttpMethod method, URI uri, @Nullable String contextPath,
+			MultiValueMap<String, String> headers) {
 
-	/**
-	 * Constructor with the URI and headers for the request.
-	 * @param uri the URI for the request
-	 * @param contextPath the context path for the request
-	 * @param headers the headers for the request (as {@link HttpHeaders})
-	 */
-	public AbstractServerHttpRequest(URI uri, @Nullable String contextPath, HttpHeaders headers) {
+		Assert.notNull(method, "Method must not be null");
+		Assert.notNull(uri, "Uri must not be null");
+		Assert.notNull(headers, "Headers must not be null");
+
+		this.method = method;
 		this.uri = uri;
 		this.path = RequestPath.parse(uri, contextPath);
 		this.headers = HttpHeaders.readOnlyHttpHeaders(headers);
@@ -110,6 +110,11 @@ public abstract class AbstractServerHttpRequest implements ServerHttpRequest {
 	@Nullable
 	protected String initId() {
 		return null;
+	}
+
+	@Override
+	public HttpMethod getMethod() {
+		return this.method;
 	}
 
 	@Override

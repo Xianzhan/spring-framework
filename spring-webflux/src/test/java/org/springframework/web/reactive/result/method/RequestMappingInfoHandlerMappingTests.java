@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.web.bind.annotation.RequestMethod.GET;
 import static org.springframework.web.bind.annotation.RequestMethod.HEAD;
 import static org.springframework.web.bind.annotation.RequestMethod.OPTIONS;
-import static org.springframework.web.filter.reactive.ServerHttpObservationFilter.CURRENT_OBSERVATION_CONTEXT_ATTRIBUTE;
 import static org.springframework.web.reactive.HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE;
 import static org.springframework.web.reactive.HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE;
 import static org.springframework.web.reactive.result.method.RequestMappingInfo.paths;
@@ -261,11 +260,12 @@ public class RequestMappingInfoHandlerMappingTests {
 	}
 
 	@Test
+	@SuppressWarnings("removal")
 	public void handleMatchBestMatchingPatternAttributeInObservationContext() {
 		RequestMappingInfo key = paths("/{path1}/2", "/**").build();
 		ServerWebExchange exchange = MockServerWebExchange.from(get("/1/2"));
 		ServerRequestObservationContext observationContext = new ServerRequestObservationContext(exchange.getRequest(), exchange.getResponse(), exchange.getAttributes());
-		exchange.getAttributes().put(CURRENT_OBSERVATION_CONTEXT_ATTRIBUTE, observationContext);
+		exchange.getAttributes().put(ServerRequestObservationContext.CURRENT_OBSERVATION_CONTEXT_ATTRIBUTE, observationContext);
 		this.handlerMapping.handleMatch(key, handlerMethod, exchange);
 
 		assertThat(observationContext.getPathPattern()).isEqualTo("/{path1}/2");
@@ -276,7 +276,7 @@ public class RequestMappingInfoHandlerMappingTests {
 		ServerWebExchange exchange = MockServerWebExchange.from(get(""));
 		this.handlerMapping.handleMatch(paths().build(), handlerMethod, exchange);
 		PathPattern pattern = (PathPattern) exchange.getAttributes().get(BEST_MATCHING_PATTERN_ATTRIBUTE);
-		assertThat(pattern.getPatternString()).isEqualTo("");
+		assertThat(pattern.getPatternString()).isEmpty();
 	}
 
 	@Test

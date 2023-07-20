@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -325,7 +325,7 @@ class ReflectionTestUtilsTests {
 	void invokeMethodWithAutoboxingAndUnboxing() {
 		// IntelliJ IDEA 11 won't accept int assignment here
 		Integer difference = invokeMethod(component, "subtract", 5, 2);
-		assertThat(difference.intValue()).as("subtract(5, 2)").isEqualTo(3);
+		assertThat(difference).as("subtract(5, 2)").isEqualTo(3);
 	}
 
 	@Test
@@ -333,14 +333,14 @@ class ReflectionTestUtilsTests {
 	void invokeMethodWithPrimitiveVarArgs() {
 		// IntelliJ IDEA 11 won't accept int assignment here
 		Integer sum = invokeMethod(component, "add", 1, 2, 3, 4);
-		assertThat(sum.intValue()).as("add(1,2,3,4)").isEqualTo(10);
+		assertThat(sum).as("add(1,2,3,4)").isEqualTo(10);
 	}
 
 	@Test
 	void invokeMethodWithPrimitiveVarArgsAsSingleArgument() {
 		// IntelliJ IDEA 11 won't accept int assignment here
 		Integer sum = invokeMethod(component, "add", new int[] { 1, 2, 3, 4 });
-		assertThat(sum.intValue()).as("add(1,2,3,4)").isEqualTo(10);
+		assertThat(sum).as("add(1,2,3,4)").isEqualTo(10);
 	}
 
 	@Test
@@ -401,7 +401,7 @@ class ReflectionTestUtilsTests {
 	void setFieldOnLegacyEntityWithSideEffectsInToString() {
 		String testCollaborator = "test collaborator";
 		setField(entity, "collaborator", testCollaborator, Object.class);
-		assertThat(entity.toString().contains(testCollaborator)).isTrue();
+		assertThat(entity.toString()).contains(testCollaborator);
 	}
 
 	@Test // SPR-14363
@@ -421,7 +421,7 @@ class ReflectionTestUtilsTests {
 	void invokeSetterMethodOnLegacyEntityWithSideEffectsInToString() {
 		String testCollaborator = "test collaborator";
 		invokeSetterMethod(entity, "collaborator", testCollaborator);
-		assertThat(entity.toString().contains(testCollaborator)).isTrue();
+		assertThat(entity.toString()).contains(testCollaborator);
 	}
 
 	@Test

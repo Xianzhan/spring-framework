@@ -305,7 +305,7 @@ public class DispatcherServlet extends FrameworkServlet {
 	private boolean detectAllViewResolvers = true;
 
 	/** Throw a NoHandlerFoundException if no Handler was found to process this request? *.*/
-	private boolean throwExceptionIfNoHandlerFound = false;
+	private boolean throwExceptionIfNoHandlerFound = true;
 
 	/** Perform cleanup of request attributes after include request?. */
 	private boolean cleanupAfterInclude = true;
@@ -467,7 +467,12 @@ public class DispatcherServlet extends FrameworkServlet {
 	 * <p>Default is "false", meaning the DispatcherServlet sends a NOT_FOUND error through the
 	 * Servlet response.
 	 * @since 4.0
+	 * @deprecated as of 6.1 this property is set to {@code true} by default, and
+	 * should not need to be customized; in effect, {@link DispatcherServlet}
+	 * should always raise {@link NoHandlerFoundException} and allow it to be
+	 * handled through a {@link HandlerExceptionResolver}.
 	 */
+	@Deprecated(since = "6.1", forRemoval = true)
 	public void setThrowExceptionIfNoHandlerFound(boolean throwExceptionIfNoHandlerFound) {
 		this.throwExceptionIfNoHandlerFound = throwExceptionIfNoHandlerFound;
 	}
@@ -915,12 +920,12 @@ public class DispatcherServlet extends FrameworkServlet {
 	/**
 	 * Create a default strategy.
 	 * <p>The default implementation uses
-	 * {@link org.springframework.beans.factory.config.AutowireCapableBeanFactory#createBean}.
+	 * {@link org.springframework.beans.factory.config.AutowireCapableBeanFactory#createBean(Class)}.
 	 * @param context the current WebApplicationContext
 	 * @param clazz the strategy implementation class to instantiate
 	 * @return the fully configured strategy instance
 	 * @see org.springframework.context.ApplicationContext#getAutowireCapableBeanFactory()
-	 * @see org.springframework.beans.factory.config.AutowireCapableBeanFactory#createBean
+	 * @see org.springframework.beans.factory.config.AutowireCapableBeanFactory#createBean(Class)
 	 */
 	protected Object createDefaultStrategy(ApplicationContext context, Class<?> clazz) {
 		return context.getAutowireCapableBeanFactory().createBean(clazz);

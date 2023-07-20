@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -282,7 +282,7 @@ public class FactoryMethodTests {
 		FactoryMethods fm2 = (FactoryMethods) xbf.getBean("testBeanOnlyPrototype", tbArg2);
 		assertThat(fm2.getTestBean().getName()).isEqualTo("arg2");
 		assertThat(fm2.getNum()).isEqualTo(fm1.getNum());
-		assertThat("testBeanOnlyPrototypeDISetterString").isEqualTo(fm2.getStringValue());
+		assertThat(fm2.getStringValue()).isEqualTo("testBeanOnlyPrototypeDISetterString");
 		assertThat(fm2.getStringValue()).isEqualTo(fm2.getStringValue());
 		// The TestBean reference is resolved to a prototype in the factory
 		assertThat(fm2.getTestBean()).isSameAs(fm2.getTestBean());
@@ -337,16 +337,14 @@ public class FactoryMethodTests {
 		// Check that listInstance is not considered a bean of type FactoryMethods.
 		assertThat(List.class.isAssignableFrom(xbf.getType("listInstance"))).isTrue();
 		String[] names = xbf.getBeanNamesForType(FactoryMethods.class);
-		boolean condition1 = !Arrays.asList(names).contains("listInstance");
-		assertThat(condition1).isTrue();
+		assertThat(Arrays.asList(names).contains("listInstance")).isFalse();
 		names = xbf.getBeanNamesForType(List.class);
 		assertThat(Arrays.asList(names).contains("listInstance")).isTrue();
 
 		xbf.preInstantiateSingletons();
 		assertThat(List.class.isAssignableFrom(xbf.getType("listInstance"))).isTrue();
 		names = xbf.getBeanNamesForType(FactoryMethods.class);
-		boolean condition = !Arrays.asList(names).contains("listInstance");
-		assertThat(condition).isTrue();
+		assertThat(Arrays.asList(names).contains("listInstance")).isFalse();
 		names = xbf.getBeanNamesForType(List.class);
 		assertThat(Arrays.asList(names).contains("listInstance")).isTrue();
 		List<?> list = (List<?>) xbf.getBean("listInstance");

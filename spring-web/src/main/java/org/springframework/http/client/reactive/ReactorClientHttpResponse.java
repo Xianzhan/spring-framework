@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseCookie;
+import org.springframework.http.support.Netty4HeadersAdapter;
 import org.springframework.lang.Nullable;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.LinkedMultiValueMap;
@@ -74,7 +75,7 @@ class ReactorClientHttpResponse implements ClientHttpResponse {
 	 */
 	public ReactorClientHttpResponse(HttpClientResponse response, Connection connection) {
 		this.response = response;
-		MultiValueMap<String, String> adapter = new NettyHeadersAdapter(response.responseHeaders());
+		MultiValueMap<String, String> adapter = new Netty4HeadersAdapter(response.responseHeaders());
 		this.headers = HttpHeaders.readOnlyHttpHeaders(adapter);
 		this.inbound = connection.inbound();
 		this.bufferFactory = new NettyDataBufferFactory(connection.outbound().alloc());
@@ -87,7 +88,7 @@ class ReactorClientHttpResponse implements ClientHttpResponse {
 	@Deprecated
 	public ReactorClientHttpResponse(HttpClientResponse response, NettyInbound inbound, ByteBufAllocator alloc) {
 		this.response = response;
-		MultiValueMap<String, String> adapter = new NettyHeadersAdapter(response.responseHeaders());
+		MultiValueMap<String, String> adapter = new Netty4HeadersAdapter(response.responseHeaders());
 		this.headers = HttpHeaders.readOnlyHttpHeaders(adapter);
 		this.inbound = inbound;
 		this.bufferFactory = new NettyDataBufferFactory(alloc);
@@ -153,10 +154,8 @@ class ReactorClientHttpResponse implements ClientHttpResponse {
 
 	@Nullable
 	private static String getSameSite(Cookie cookie) {
-		if (cookie instanceof DefaultCookie defaultCookie) {
-			if (defaultCookie.sameSite() != null) {
-				return defaultCookie.sameSite().name();
-			}
+		if (cookie instanceof DefaultCookie defaultCookie && defaultCookie.sameSite() != null) {
+			return defaultCookie.sameSite().name();
 		}
 		return null;
 	}

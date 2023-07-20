@@ -169,6 +169,14 @@ class ContentDispositionTests {
 		assertThat(cd.toString()).isEqualTo("form-data; name=\"foo\"; filename=\"bar\\\\\"");
 	}
 
+	@Test
+	void parseWindowsPath() {
+		ContentDisposition cd = ContentDisposition.parse("form-data; name=\"foo\"; filename=\"D:\\foo\\bar.txt\"");
+		assertThat(cd.getName()).isEqualTo("foo");
+		assertThat(cd.getFilename()).isEqualTo("D:\\foo\\bar.txt");
+		assertThat(cd.toString()).isEqualTo("form-data; name=\"foo\"; filename=\"D:\\\\foo\\\\bar.txt\"");
+	}
+
 
 	@SuppressWarnings("deprecation")
 	@Test
@@ -315,6 +323,28 @@ class ContentDispositionTests {
 		ContentDisposition parsed = ContentDisposition.parse(cd.toString());
 		assertThat(parsed).isEqualTo(cd);
 		assertThat(parsed.toString()).isEqualTo(cd.toString());
+	}
+
+	@Test // gh-30252
+	void parseFormattedWithQuestionMark() {
+		String filename = "filename with ?问号.txt";
+		ContentDisposition cd = ContentDisposition.attachment()
+				.filename(filename, StandardCharsets.UTF_8)
+				.build();
+		String result = cd.toString();
+		assertThat(result).isEqualTo("attachment; " +
+						"filename=\"=?UTF-8?Q?filename_with_=3F=E9=97=AE=E5=8F=B7.txt?=\"; " +
+						"filename*=UTF-8''filename%20with%20%3F%E9%97%AE%E5%8F%B7.txt");
+
+		String[] parts = result.split("; ");
+
+		String quotedPrintableFilename = parts[0] + "; " + parts[1];
+		assertThat(ContentDisposition.parse(quotedPrintableFilename).getFilename())
+				.isEqualTo(filename);
+
+		String rfc5987Filename = parts[0] + "; " + parts[2];
+		assertThat(ContentDisposition.parse(rfc5987Filename).getFilename())
+				.isEqualTo(filename);
 	}
 
 }

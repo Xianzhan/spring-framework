@@ -18,15 +18,25 @@ package org.springframework.util;
 
 import java.io.Closeable;
 import java.io.Externalizable;
+import java.io.File;
 import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.nio.file.Path;
+import java.time.ZoneId;
+import java.time.temporal.Temporal;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Currency;
+import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,16 +44,21 @@ import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.TimeZone;
+import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.springframework.lang.Nullable;
 
 /**
  * Miscellaneous {@code java.lang.Class} utility methods.
- * Mainly for internal use within the framework.
+ *
+ * <p>Mainly for internal use within the framework.
  *
  * @author Juergen Hoeller
  * @author Keith Donald
@@ -528,12 +543,52 @@ public abstract class ClassUtils {
 	}
 
 	/**
+	 * Delegate for {@link org.springframework.beans.BeanUtils#isSimpleValueType}.
+	 * Also used by {@link ObjectUtils#nullSafeConciseToString}.
+	 * <p>Check if the given type represents a common "simple" value type:
+	 * a primitive or primitive wrapper, an {@link Enum}, a {@link String}
+	 * or other {@link CharSequence}, a {@link Number}, a {@link Date},
+	 * a {@link Temporal}, a {@link ZoneId} a {@link TimeZone}, a {@link File},
+	 * a {@link Path}, a {@link URI}, a {@link URL}, an {@link InetAddress},
+	 * a {@link Charset}, a {@link Currency}, a {@link Locale}, a {@link UUID},
+	 * a {@link Pattern}, or a {@link Class}.
+	 * <p>{@code Void} and {@code void} are not considered simple value types.
+	 * @param type the type to check
+	 * @return whether the given type represents a "simple" value type,
+	 * suggesting value-based data binding and {@code toString} output
+	 * @since 6.1
+	 */
+	public static boolean isSimpleValueType(Class<?> type) {
+		return (Void.class != type && void.class != type &&
+				(isPrimitiveOrWrapper(type) ||
+				Enum.class.isAssignableFrom(type) ||
+				CharSequence.class.isAssignableFrom(type) ||
+				Number.class.isAssignableFrom(type) ||
+				Date.class.isAssignableFrom(type) ||
+				Temporal.class.isAssignableFrom(type) ||
+				ZoneId.class.isAssignableFrom(type) ||
+				TimeZone.class.isAssignableFrom(type) ||
+				File.class.isAssignableFrom(type) ||
+				Path.class.isAssignableFrom(type) ||
+				Charset.class.isAssignableFrom(type) ||
+				Currency.class.isAssignableFrom(type) ||
+				InetAddress.class.isAssignableFrom(type) ||
+				URI.class == type ||
+				URL.class == type ||
+				UUID.class == type ||
+				Locale.class == type ||
+				Pattern.class == type ||
+				Class.class == type));
+	}
+
+	/**
 	 * Check if the right-hand side type may be assigned to the left-hand side
 	 * type, assuming setting by reflection. Considers primitive wrapper
 	 * classes as assignable to the corresponding primitive types.
-	 * @param lhsType the target type
-	 * @param rhsType the value type that should be assigned to the target type
-	 * @return if the target type is assignable from the value type
+	 * @param lhsType the target type (left-hand side (LHS) type)
+	 * @param rhsType the value type (right-hand side (RHS) type) that should
+	 * be assigned to the target type
+	 * @return {@code true} if {@code rhsType} is assignable to {@code lhsType}
 	 * @see TypeUtils#isAssignable(java.lang.reflect.Type, java.lang.reflect.Type)
 	 */
 	public static boolean isAssignable(Class<?> lhsType, Class<?> rhsType) {

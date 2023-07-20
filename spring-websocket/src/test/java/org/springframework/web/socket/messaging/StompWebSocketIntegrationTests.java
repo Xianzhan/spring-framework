@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,12 +105,15 @@ class StompWebSocketIntegrationTests extends AbstractWebSocketIntegrationTests {
 	}
 
 	@ParameterizedWebSocketTest  // SPR-10930
-	void sendMessageToBrokerAndReceiveReplyViaTopic(WebSocketTestServer server, WebSocketClient webSocketClient, TestInfo testInfo) throws Exception {
+	void sendMessageToBrokerAndReceiveReplyViaTopicWithSelectorHeader(WebSocketTestServer server, WebSocketClient webSocketClient, TestInfo testInfo) throws Exception {
 		super.setup(server, webSocketClient, testInfo);
 
+		String destination = "destination:/topic/foo";
+		String selector = "selector:headers.foo == 'bar'";
+
 		TextMessage m0 = create(StompCommand.CONNECT).headers("accept-version:1.1").build();
-		TextMessage m1 = create(StompCommand.SUBSCRIBE).headers("id:subs1", "destination:/topic/foo").build();
-		TextMessage m2 = create(StompCommand.SEND).headers("destination:/topic/foo").body("5").build();
+		TextMessage m1 = create(StompCommand.SUBSCRIBE).headers("id:subs1", destination, selector).build();
+		TextMessage m2 = create(StompCommand.SEND).headers(destination, "foo:bar").body("5").build();
 
 		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(2, m0, m1, m2);
 
@@ -119,7 +122,7 @@ class StompWebSocketIntegrationTests extends AbstractWebSocketIntegrationTests {
 			assertThat(clientHandler.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
 
 			String payload = clientHandler.actual.get(1).getPayload();
-			assertThat(payload.startsWith("MESSAGE\n")).as("Expected STOMP MESSAGE, got " + payload).isTrue();
+			assertThat(payload).as("Expected STOMP MESSAGE, got " + payload).startsWith("MESSAGE\n");
 		}
 	}
 
@@ -137,8 +140,8 @@ class StompWebSocketIntegrationTests extends AbstractWebSocketIntegrationTests {
 			assertThat(session).isNotNull();
 			assertThat(clientHandler.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
 			String payload = clientHandler.actual.get(1).getPayload();
-			assertThat(payload.contains(destHeader)).as("Expected STOMP destination=/app/number, got " + payload).isTrue();
-			assertThat(payload.contains("42")).as("Expected STOMP Payload=42, got " + payload).isTrue();
+			assertThat(payload).as("Expected STOMP destination=/app/number, got " + payload).contains(destHeader);
+			assertThat(payload).as("Expected STOMP Payload=42, got " + payload).contains("42");
 		}
 	}
 
@@ -157,9 +160,9 @@ class StompWebSocketIntegrationTests extends AbstractWebSocketIntegrationTests {
 			assertThat(session).isNotNull();
 			assertThat(clientHandler.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
 			String payload = clientHandler.actual.get(1).getPayload();
-			assertThat(payload.startsWith("MESSAGE\n")).isTrue();
-			assertThat(payload.contains("destination:/user/queue/error\n")).isTrue();
-			assertThat(payload.endsWith("Got error: Bad input\0")).isTrue();
+			assertThat(payload).startsWith("MESSAGE\n");
+			assertThat(payload).contains("destination:/user/queue/error\n");
+			assertThat(payload).endsWith("Got error: Bad input\0");
 		}
 	}
 
@@ -179,9 +182,9 @@ class StompWebSocketIntegrationTests extends AbstractWebSocketIntegrationTests {
 			assertThat(session).isNotNull();
 			assertThat(clientHandler.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
 			String payload = clientHandler.actual.get(1).getPayload();
-			assertThat(payload.startsWith("MESSAGE\n")).isTrue();
-			assertThat(payload.contains("destination:/topic/scopedBeanValue\n")).isTrue();
-			assertThat(payload.endsWith("55\0")).isTrue();
+			assertThat(payload).startsWith("MESSAGE\n");
+			assertThat(payload).contains("destination:/topic/scopedBeanValue\n");
+			assertThat(payload).endsWith("55\0");
 		}
 	}
 
@@ -317,7 +320,7 @@ class StompWebSocketIntegrationTests extends AbstractWebSocketIntegrationTests {
 		@Override
 		public void configureMessageBroker(MessageBrokerRegistry configurer) {
 			configurer.setApplicationDestinationPrefixes("/app");
-			configurer.enableSimpleBroker("/topic", "/queue");
+			configurer.enableSimpleBroker("/topic", "/queue").setSelectorHeaderName("selector");
 		}
 
 		@Bean

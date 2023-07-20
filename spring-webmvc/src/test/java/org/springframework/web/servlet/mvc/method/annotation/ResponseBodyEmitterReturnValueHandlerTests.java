@@ -121,7 +121,7 @@ class ResponseBodyEmitterReturnValueHandlerTests {
 		this.handler.handleReturnValue(emitter, type, this.mavContainer, this.webRequest);
 
 		assertThat(this.request.isAsyncStarted()).isTrue();
-		assertThat(this.response.getContentAsString()).isEqualTo("");
+		assertThat(this.response.getContentAsString()).isEmpty();
 
 		SimpleBean bean = new SimpleBean();
 		bean.setId(1L);
@@ -233,7 +233,7 @@ class ResponseBodyEmitterReturnValueHandlerTests {
 	}
 
 	@Test
-	@SuppressWarnings({"try","unused"})
+	@SuppressWarnings({"try","unused", "deprecation"})
 	void responseBodyFluxWithThreadLocal() throws Exception {
 		this.request.addHeader("Accept", "text/event-stream");
 

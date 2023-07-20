@@ -29,7 +29,6 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -44,7 +43,7 @@ import org.springframework.web.testfixture.servlet.MockServletContext;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
-import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -173,7 +172,8 @@ class ResourceHttpRequestHandlerTests {
 		this.handler.handleRequest(this.request, this.response);
 
 		assertThat(this.response.getHeader("Cache-Control")).isEqualTo("max-age=3600, must-revalidate");
-		assertThat(this.response.getDateHeader("Expires") >= System.currentTimeMillis() - 1000 + (3600 * 1000)).isTrue();
+		assertThat(this.response.getDateHeader("Expires")).isGreaterThanOrEqualTo(
+				System.currentTimeMillis() - 1000 + (3600 * 1000));
 		assertThat(this.response.containsHeader("Last-Modified")).isTrue();
 		assertThat(this.response.getDateHeader("Last-Modified") / 1000).isEqualTo(resourceLastModified("test/foo.css") / 1000);
 		assertThat(this.response.getHeader("Accept-Ranges")).isEqualTo("bytes");
@@ -193,7 +193,7 @@ class ResourceHttpRequestHandlerTests {
 		assertThat(this.response.getHeader("Pragma")).isEqualTo("no-cache");
 		assertThat(this.response.getHeaderValues("Cache-Control")).hasSize(1);
 		assertThat(this.response.getHeader("Cache-Control")).isEqualTo("no-cache");
-		assertThat(this.response.getDateHeader("Expires") <= System.currentTimeMillis()).isTrue();
+		assertThat(this.response.getDateHeader("Expires")).isLessThanOrEqualTo(System.currentTimeMillis());
 		assertThat(this.response.containsHeader("Last-Modified")).isTrue();
 		assertThat(this.response.getDateHeader("Last-Modified") / 1000).isEqualTo(resourceLastModified("test/foo.css") / 1000);
 		assertThat(this.response.getHeader("Accept-Ranges")).isEqualTo("bytes");
@@ -367,11 +367,11 @@ class ResourceHttpRequestHandlerTests {
 		testInvalidPath("%2F%2F%2E%2E%2F%2F%2E%2E" + secretPath, handler);
 	}
 
-	private void testInvalidPath(String requestPath, ResourceHttpRequestHandler handler) throws Exception {
+	private void testInvalidPath(String requestPath, ResourceHttpRequestHandler handler) {
 		this.request.setAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE, requestPath);
 		this.response = new MockHttpServletResponse();
-		handler.handleRequest(this.request, this.response);
-		assertThat(this.response.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+		assertThatThrownBy(() -> handler.handleRequest(this.request, this.response))
+				.isInstanceOf(NoResourceFoundException.class);
 	}
 
 	@Test
@@ -409,22 +409,17 @@ class ResourceHttpRequestHandlerTests {
 		testResolvePathWithTraversal(location, "/  " + secretPath);
 	}
 
-	private void testResolvePathWithTraversal(Resource location, String requestPath) throws Exception {
+	private void testResolvePathWithTraversal(Resource location, String requestPath) {
 		this.request.setAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE, requestPath);
 		this.response = new MockHttpServletResponse();
-		this.handler.handleRequest(this.request, this.response);
-		if (!location.createRelative(requestPath).exists() && !requestPath.contains(":")) {
-			fail(requestPath + " doesn't actually exist as a relative path");
-		}
-		assertThat(this.response.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+		assertNotFound();
 	}
 
 	@Test
-	void ignoreInvalidEscapeSequence() throws Exception {
+	void ignoreInvalidEscapeSequence() {
 		this.request.setAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE, "/%foo%/bar.txt");
 		this.response = new MockHttpServletResponse();
-		this.handler.handleRequest(this.request, this.response);
-		assertThat(this.response.getStatus()).isEqualTo(404);
+		assertNotFound();
 	}
 
 	@Test
@@ -451,7 +446,7 @@ class ResourceHttpRequestHandlerTests {
 		assertThat(this.handler.processPath((char) 1 + " / " + (char) 127 + " // foo/bar")).isEqualTo("/foo/bar");
 
 		// root or empty path
-		assertThat(this.handler.processPath("   ")).isEqualTo("");
+		assertThat(this.handler.processPath("   ")).isEmpty();
 		assertThat(this.handler.processPath("/")).isEqualTo("/");
 		assertThat(this.handler.processPath("///")).isEqualTo("/");
 		assertThat(this.handler.processPath("/ /   / ")).isEqualTo("/");
@@ -509,32 +504,29 @@ class ResourceHttpRequestHandlerTests {
 	@Test
 	void directory() throws Exception {
 		this.request.setAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE, "js/");
-		this.handler.handleRequest(this.request, this.response);
-		assertThat(this.response.getStatus()).isEqualTo(404);
+		assertNotFound();
 	}
 
 	@Test
 	void directoryInJarFile() throws Exception {
 		this.request.setAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE, "underscorejs/");
-		this.handler.handleRequest(this.request, this.response);
-		assertThat(this.response.getStatus()).isEqualTo(404);
+		assertNotFound();
 	}
 
 	@Test
-	void missingResourcePath() throws Exception {
+	void missingResourcePath() {
 		this.request.setAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE, "");
-		this.handler.handleRequest(this.request, this.response);
-		assertThat(this.response.getStatus()).isEqualTo(404);
+		assertNotFound();
 	}
 
 	@Test
-	void noPathWithinHandlerMappingAttribute() throws Exception {
+	void noPathWithinHandlerMappingAttribute() {
 		assertThatIllegalStateException().isThrownBy(() ->
 				this.handler.handleRequest(this.request, this.response));
 	}
 
 	@Test
-	void unsupportedHttpMethod() throws Exception {
+	void unsupportedHttpMethod() {
 		this.request.setAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE, "foo.css");
 		this.request.setMethod("POST");
 		assertThatExceptionOfType(HttpRequestMethodNotSupportedException.class).isThrownBy(() ->
@@ -542,19 +534,18 @@ class ResourceHttpRequestHandlerTests {
 	}
 
 	@Test
-	void resourceNotFound() throws Exception {
+	void testResourceNotFound() {
 		for (HttpMethod method : HttpMethod.values()) {
 			this.request = new MockHttpServletRequest("GET", "");
 			this.response = new MockHttpServletResponse();
-			resourceNotFound(method);
+			testResourceNotFound(method);
 		}
 	}
 
-	private void resourceNotFound(HttpMethod httpMethod) throws Exception {
+	private void testResourceNotFound(HttpMethod httpMethod) {
 		this.request.setMethod(httpMethod.name());
 		this.request.setAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE, "not-there.css");
-		this.handler.handleRequest(this.request, this.response);
-		assertThat(this.response.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+		assertNotFound();
 	}
 
 	@Test
@@ -651,7 +642,7 @@ class ResourceHttpRequestHandlerTests {
 		this.handler.handleRequest(this.request, this.response);
 
 		assertThat(this.response.getStatus()).isEqualTo(206);
-		assertThat(this.response.getContentType().startsWith("multipart/byteranges; boundary=")).isTrue();
+		assertThat(this.response.getContentType()).startsWith("multipart/byteranges; boundary=");
 
 		String boundary = "--" + this.response.getContentType().substring(31);
 
@@ -758,6 +749,11 @@ class ResourceHttpRequestHandlerTests {
 						"If this is intentional, please pass it as a pre-configured Resource via setLocations.");
 	}
 
+
+	private void assertNotFound() {
+		assertThatThrownBy(() -> this.handler.handleRequest(this.request, this.response))
+				.isInstanceOf(NoResourceFoundException.class);
+	}
 
 	private long resourceLastModified(String resourceName) throws IOException {
 		return new ClassPathResource(resourceName, getClass()).getFile().lastModified();

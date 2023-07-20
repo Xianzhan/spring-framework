@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import org.apache.commons.logging.LogFactory;
 
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
-import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.web.context.request.RequestAttributes;
@@ -52,6 +51,7 @@ import org.springframework.web.context.request.async.DeferredResult.DeferredResu
  *
  * @author Rossen Stoyanchev
  * @author Juergen Hoeller
+ * @author Sam Brannen
  * @since 3.2
  * @see org.springframework.web.context.request.AsyncWebRequestInterceptor
  * @see org.springframework.web.servlet.AsyncHandlerInterceptor
@@ -73,15 +73,16 @@ public final class WebAsyncManager {
 	private static final DeferredResultProcessingInterceptor timeoutDeferredResultInterceptor =
 			new TimeoutDeferredResultProcessingInterceptor();
 
-	private static Boolean taskExecutorWarning = true;
 
-
+	@Nullable
 	private AsyncWebRequest asyncWebRequest;
 
 	private AsyncTaskExecutor taskExecutor = DEFAULT_TASK_EXECUTOR;
 
+	@Nullable
 	private volatile Object concurrentResult = RESULT_NONE;
 
+	@Nullable
 	private volatile Object[] concurrentResultContext;
 
 	/*
@@ -164,6 +165,7 @@ public final class WebAsyncManager {
 	 * concurrent handling.
 	 * @see #clearConcurrentResult()
 	 */
+	@Nullable
 	public Object[] getConcurrentResultContext() {
 		return this.concurrentResultContext;
 	}
@@ -290,9 +292,6 @@ public final class WebAsyncManager {
 		if (executor != null) {
 			this.taskExecutor = executor;
 		}
-		else {
-			logExecutorWarning();
-		}
 
 		List<CallableProcessingInterceptor> interceptors = new ArrayList<>();
 		interceptors.add(webAsyncTask.getInterceptor());
@@ -352,32 +351,12 @@ public final class WebAsyncManager {
 		}
 	}
 
-	private void logExecutorWarning() {
-		if (taskExecutorWarning && logger.isWarnEnabled()) {
-			synchronized (DEFAULT_TASK_EXECUTOR) {
-				AsyncTaskExecutor executor = this.taskExecutor;
-				if (taskExecutorWarning &&
-						(executor instanceof SimpleAsyncTaskExecutor || executor instanceof SyncTaskExecutor)) {
-					String executorTypeName = executor.getClass().getSimpleName();
-					logger.warn("\n!!!\n" +
-							"An Executor is required to handle java.util.concurrent.Callable return values.\n" +
-							"Please, configure a TaskExecutor in the MVC config under \"async support\".\n" +
-							"The " + executorTypeName + " currently in use is not suitable under load.\n" +
-							"-------------------------------\n" +
-							"Request URI: '" + formatRequestUri() + "'\n" +
-							"!!!");
-					taskExecutorWarning = false;
-				}
-			}
-		}
-	}
-
 	private String formatRequestUri() {
 		HttpServletRequest request = this.asyncWebRequest.getNativeRequest(HttpServletRequest.class);
 		return request != null ? request.getRequestURI() : "servlet container";
 	}
 
-	private void setConcurrentResultAndDispatch(Object result) {
+	private void setConcurrentResultAndDispatch(@Nullable Object result) {
 		synchronized (WebAsyncManager.this) {
 			if (this.concurrentResult != RESULT_NONE) {
 				return;

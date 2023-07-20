@@ -49,6 +49,7 @@ import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.validation.BindException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.servlet.handler.PathPatternsTestUtils;
 import org.springframework.web.testfixture.servlet.MockHttpServletRequest;
@@ -111,7 +112,7 @@ class DefaultServerRequestTests {
 
 		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
 
-		assertThat(request.attribute("foo")).isEqualTo(Optional.of("bar"));
+		assertThat(request.attribute("foo")).contains("bar");
 	}
 
 	@Test
@@ -121,7 +122,7 @@ class DefaultServerRequestTests {
 
 		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
 
-		assertThat(request.param("foo")).isEqualTo(Optional.of("bar"));
+		assertThat(request.param("foo")).contains("bar");
 	}
 
 	@Test
@@ -149,7 +150,7 @@ class DefaultServerRequestTests {
 
 		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
 
-		assertThat(request.param("foo")).isEqualTo(Optional.of(""));
+		assertThat(request.param("foo")).contains("");
 	}
 
 	@Test
@@ -159,7 +160,7 @@ class DefaultServerRequestTests {
 
 		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
 
-		assertThat(request.param("bar")).isEqualTo(Optional.empty());
+		assertThat(request.param("bar")).isNotPresent();
 	}
 
 	@Test
@@ -221,7 +222,7 @@ class DefaultServerRequestTests {
 		assertThat(headers.accept()).isEqualTo(accept);
 		assertThat(headers.acceptCharset()).isEqualTo(acceptCharset);
 		assertThat(headers.contentLength()).isEqualTo(OptionalLong.of(contentLength));
-		assertThat(headers.contentType()).isEqualTo(Optional.of(contentType));
+		assertThat(headers.contentType()).contains(contentType);
 		assertThat(headers.header(HttpHeaders.CONTENT_TYPE)).containsExactly(MediaType.TEXT_PLAIN_VALUE);
 		assertThat(headers.firstHeader(HttpHeaders.CONTENT_TYPE)).isEqualTo(MediaType.TEXT_PLAIN_VALUE);
 		assertThat(headers.asHttpHeaders()).isEqualTo(httpHeaders);
@@ -301,8 +302,73 @@ class DefaultServerRequestTests {
 
 		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
 
-		assertThat(request.principal().get()).isEqualTo(principal);
+		assertThat(request.principal()).contains(principal);
 	}
+
+	@Test
+	void bindToConstructor() throws BindException {
+		MockHttpServletRequest servletRequest = PathPatternsTestUtils.initRequest("GET", "/", true);
+		servletRequest.addParameter("foo", "FOO");
+		servletRequest.addParameter("bar", "BAR");
+
+		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
+
+		ConstructorInjection result = request.bind(ConstructorInjection.class);
+		assertThat(result.getFoo()).isEqualTo("FOO");
+		assertThat(result.getBar()).isEqualTo("BAR");
+	}
+
+	@Test
+	void bindToProperties() throws BindException {
+		MockHttpServletRequest servletRequest = PathPatternsTestUtils.initRequest("GET", "/", true);
+		servletRequest.addParameter("foo", "FOO");
+		servletRequest.addParameter("bar", "BAR");
+
+		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
+
+		PropertyInjection result = request.bind(PropertyInjection.class);
+		assertThat(result.getFoo()).isEqualTo("FOO");
+		assertThat(result.getBar()).isEqualTo("BAR");
+	}
+
+	@Test
+	void bindToMixed() throws BindException {
+		MockHttpServletRequest servletRequest = PathPatternsTestUtils.initRequest("GET", "/", true);
+		servletRequest.addParameter("foo", "FOO");
+		servletRequest.addParameter("bar", "BAR");
+
+		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
+
+		MixedInjection result = request.bind(MixedInjection.class);
+		assertThat(result.getFoo()).isEqualTo("FOO");
+		assertThat(result.getBar()).isEqualTo("BAR");
+	}
+
+	@Test
+	void bindCustomizer() throws BindException {
+		MockHttpServletRequest servletRequest = PathPatternsTestUtils.initRequest("GET", "/", true);
+		servletRequest.addParameter("foo", "FOO");
+		servletRequest.addParameter("bar", "BAR");
+
+		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
+
+		PropertyInjection result = request.bind(PropertyInjection.class, dataBinder -> dataBinder.setAllowedFields("foo"));
+		assertThat(result.getFoo()).isEqualTo("FOO");
+		assertThat(result.getBar()).isNull();
+	}
+
+	@Test
+	void bindError() throws BindException {
+		MockHttpServletRequest servletRequest = PathPatternsTestUtils.initRequest("GET", "/", true);
+		servletRequest.addParameter("foo", "FOO");
+
+		DefaultServerRequest request = new DefaultServerRequest(servletRequest, this.messageConverters);
+
+		assertThatExceptionOfType(BindException.class).isThrownBy(() ->
+			request.bind(ErrorInjection.class)
+		);
+	}
+
 
 	@ParameterizedHttpMethodTest
 	void checkNotModifiedTimestamp(String method) throws Exception {
@@ -485,6 +551,90 @@ class DefaultServerRequestTests {
 	@ParameterizedTest(name = "[{index}] {0}")
 	@ValueSource(strings = { "GET", "HEAD" })
 	@interface ParameterizedHttpMethodTest {
+	}
+
+
+	@SuppressWarnings("unused")
+	private static final class ConstructorInjection {
+
+		private final String foo;
+
+		private final String bar;
+
+		public ConstructorInjection(String foo, String bar) {
+			this.foo = foo;
+			this.bar = bar;
+		}
+
+		public String getFoo() {
+			return this.foo;
+		}
+
+		public String getBar() {
+			return this.bar;
+		}
+	}
+
+	@SuppressWarnings("unused")
+	private static final class PropertyInjection {
+
+		private String foo;
+
+		private String bar;
+
+		public String getFoo() {
+			return this.foo;
+		}
+
+		public void setFoo(String foo) {
+			this.foo = foo;
+		}
+
+		public String getBar() {
+			return this.bar;
+		}
+
+		public void setBar(String bar) {
+			this.bar = bar;
+		}
+	}
+
+	@SuppressWarnings("unused")
+	private static final class MixedInjection {
+
+		private final String foo;
+
+		private String bar;
+
+		public MixedInjection(String foo) {
+			this.foo = foo;
+		}
+
+		public String getFoo() {
+			return this.foo;
+		}
+
+		public String getBar() {
+			return this.bar;
+		}
+
+		public void setBar(String bar) {
+			this.bar = bar;
+		}
+	}
+
+	@SuppressWarnings("unused")
+	private static final class ErrorInjection {
+
+		private int foo;
+
+		public int getFoo() {
+			return this.foo;
+		}
+
+		public void setFoo(int foo) {
+			this.foo = foo;
+		}
 	}
 
 }

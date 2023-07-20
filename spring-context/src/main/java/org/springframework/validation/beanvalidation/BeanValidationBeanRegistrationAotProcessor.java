@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import jakarta.validation.ConstraintValidator;
+import jakarta.validation.NoProviderFoundException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.metadata.BeanDescriptor;
@@ -48,30 +49,52 @@ import org.springframework.util.ClassUtils;
  * required for {@link ConstraintValidator}s.
  *
  * @author Sebastien Deleuze
+ * @author Juergen Hoeller
  * @since 6.0.5
  */
 class BeanValidationBeanRegistrationAotProcessor implements BeanRegistrationAotProcessor {
 
-	private static final boolean isBeanValidationPresent = ClassUtils.isPresent(
+	private static final boolean beanValidationPresent = ClassUtils.isPresent(
 			"jakarta.validation.Validation", BeanValidationBeanRegistrationAotProcessor.class.getClassLoader());
 
 	private static final Log logger = LogFactory.getLog(BeanValidationBeanRegistrationAotProcessor.class);
 
-	@Nullable
+
 	@Override
+	@Nullable
 	public BeanRegistrationAotContribution processAheadOfTime(RegisteredBean registeredBean) {
-		if (isBeanValidationPresent) {
+		if (beanValidationPresent) {
 			return BeanValidationDelegate.processAheadOfTime(registeredBean);
 		}
 		return null;
 	}
 
+
+	/**
+	 * Inner class to avoid a hard dependency on the Bean Validation API at runtime.
+	 */
 	private static class BeanValidationDelegate {
 
-		private static final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		@Nullable
+		private static final Validator validator = getValidatorIfAvailable();
+
+		@Nullable
+		private static Validator getValidatorIfAvailable() {
+			try {
+				return Validation.buildDefaultValidatorFactory().getValidator();
+			}
+			catch (NoProviderFoundException ex) {
+				logger.info("No Bean Validation provider available - skipping validation constraint hint inference");
+				return null;
+			}
+		}
 
 		@Nullable
 		public static BeanRegistrationAotContribution processAheadOfTime(RegisteredBean registeredBean) {
+			if (validator == null) {
+				return null;
+			}
+
 			BeanDescriptor descriptor;
 			try {
 				descriptor = validator.getConstraintsForClass(registeredBean.getBeanClass());
@@ -88,6 +111,7 @@ class BeanValidationBeanRegistrationAotProcessor implements BeanRegistrationAotP
 				}
 				return null;
 			}
+
 			Set<ConstraintDescriptor<?>> constraintDescriptors = new HashSet<>();
 			for (MethodDescriptor methodDescriptor : descriptor.getConstrainedMethods(MethodType.NON_GETTER, MethodType.GETTER)) {
 				for (ParameterDescriptor parameterDescriptor : methodDescriptor.getParameterDescriptors()) {
@@ -107,8 +131,8 @@ class BeanValidationBeanRegistrationAotProcessor implements BeanRegistrationAotP
 			}
 			return null;
 		}
-
 	}
+
 
 	private static class BeanValidationBeanRegistrationAotContribution implements BeanRegistrationAotContribution {
 

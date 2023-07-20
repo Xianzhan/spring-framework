@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,11 +37,13 @@ public abstract class AbstractTypeReference implements TypeReference {
 	@Nullable
 	private final TypeReference enclosingType;
 
+
 	protected AbstractTypeReference(String packageName, String simpleName, @Nullable TypeReference enclosingType) {
 		this.packageName = packageName;
 		this.simpleName = simpleName;
 		this.enclosingType = enclosingType;
 	}
+
 
 	@Override
 	public String getName() {
@@ -67,30 +69,26 @@ public abstract class AbstractTypeReference implements TypeReference {
 		return this.enclosingType;
 	}
 
-	protected abstract boolean isPrimitive();
-
 	protected String addPackageIfNecessary(String part) {
 		if (this.packageName.isEmpty() ||
-				this.packageName.equals("java.lang") && isPrimitive()) {
+				(this.packageName.equals("java.lang") && isPrimitive())) {
 			return part;
 		}
 		return this.packageName + '.' + part;
 	}
 
+	protected abstract boolean isPrimitive();
+
+
 	@Override
-	public int hashCode() {
-		return Objects.hash(getCanonicalName());
+	public boolean equals(@Nullable Object other) {
+		return (this == other || (other instanceof TypeReference that &&
+				getCanonicalName().equals(that.getCanonicalName())));
 	}
 
 	@Override
-	public boolean equals(Object other) {
-		if (this == other) {
-			return true;
-		}
-		if (!(other instanceof TypeReference otherReference)) {
-			return false;
-		}
-		return getCanonicalName().equals(otherReference.getCanonicalName());
+	public int hashCode() {
+		return Objects.hash(getCanonicalName());
 	}
 
 	@Override
