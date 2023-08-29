@@ -16,7 +16,10 @@
 
 package org.springframework.r2dbc.core;
 
+import java.util.Map;
+
 import io.r2dbc.spi.ConnectionFactory;
+import io.r2dbc.spi.Parameters;
 import io.r2dbc.spi.Result;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Mark Paluch
  * @author Mingyuan Wu
+ * @author Juergen Hoeller
  */
 abstract class AbstractDatabaseClientIntegrationTests {
 
@@ -93,6 +97,46 @@ abstract class AbstractDatabaseClientIntegrationTests {
 	}
 
 	@Test
+	public void executeInsertWithMap() {
+		DatabaseClient databaseClient = DatabaseClient.create(connectionFactory);
+
+		databaseClient.sql("INSERT INTO legoset (id, name, manual) VALUES(:id, :name, :manual)")
+				.bindValues(Map.of("id", 42055,
+						"name", Parameters.in("SCHAUFELRADBAGGER"),
+						"manual", Parameters.in(Integer.class)))
+				.fetch().rowsUpdated()
+				.as(StepVerifier::create)
+				.expectNext(1L)
+				.verifyComplete();
+
+		databaseClient.sql("SELECT id FROM legoset")
+				.mapValue(Integer.class)
+				.first()
+				.as(StepVerifier::create)
+				.assertNext(actual -> assertThat(actual).isEqualTo(42055))
+				.verifyComplete();
+	}
+
+	@Test
+	public void executeInsertWithRecords() {
+		DatabaseClient databaseClient = DatabaseClient.create(connectionFactory);
+
+		databaseClient.sql("INSERT INTO legoset (id, name, manual) VALUES(:id, :name, :manual)")
+				.bindProperties(new ParameterRecord(42055, "SCHAUFELRADBAGGER", null))
+				.fetch().rowsUpdated()
+				.as(StepVerifier::create)
+				.expectNext(1L)
+				.verifyComplete();
+
+		databaseClient.sql("SELECT id FROM legoset")
+				.mapProperties(ResultRecord.class)
+				.first()
+				.as(StepVerifier::create)
+				.assertNext(actual -> assertThat(actual.id()).isEqualTo(42055))
+				.verifyComplete();
+	}
+
+	@Test
 	public void shouldTranslateDuplicateKeyException() {
 		DatabaseClient databaseClient = DatabaseClient.create(connectionFactory);
 
@@ -145,6 +189,13 @@ abstract class AbstractDatabaseClientIntegrationTests {
 				.as(StepVerifier::create)
 				.expectNextCount(1)
 				.verifyComplete();
+	}
+
+
+	record ParameterRecord(int id, String name, Integer manual) {
+	}
+
+	record ResultRecord(int id) {
 	}
 
 }

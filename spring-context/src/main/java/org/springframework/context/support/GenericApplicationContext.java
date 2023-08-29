@@ -361,6 +361,11 @@ public class GenericApplicationContext extends AbstractApplicationContext implem
 	}
 
 	@Override
+	public boolean isBeanDefinitionOverridable(String beanName) {
+		return this.beanFactory.isBeanDefinitionOverridable(beanName);
+	}
+
+	@Override
 	public boolean isBeanNameInUse(String beanName) {
 		return this.beanFactory.isBeanNameInUse(beanName);
 	}
@@ -575,6 +580,10 @@ public class GenericApplicationContext extends AbstractApplicationContext implem
 		@Override
 		@Nullable
 		public Constructor<?>[] getPreferredConstructors() {
+			Constructor<?>[] fromAttribute = super.getPreferredConstructors();
+			if (fromAttribute != null) {
+				return fromAttribute;
+			}
 			Class<?> clazz = getBeanClass();
 			Constructor<?> primaryCtor = BeanUtils.findPrimaryConstructor(clazz);
 			if (primaryCtor != null) {

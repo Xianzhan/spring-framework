@@ -28,6 +28,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
@@ -45,6 +46,8 @@ import org.springframework.util.StringUtils;
  * @see java.net.URL
  */
 public class UrlResource extends AbstractFileResolvingResource {
+
+	private static final String AUTHORIZATION = "Authorization";
 
 	/**
 	 * Original URI, if available; used for URI and File access.
@@ -237,6 +240,16 @@ public class UrlResource extends AbstractFileResolvingResource {
 		}
 	}
 
+	@Override
+	protected void customizeConnection(URLConnection con) throws IOException {
+		super.customizeConnection(con);
+		String userInfo = this.url.getUserInfo();
+		if (userInfo != null) {
+			String encodedCredentials = Base64.getUrlEncoder().encodeToString(userInfo.getBytes());
+			con.setRequestProperty(AUTHORIZATION, "Basic " + encodedCredentials);
+		}
+	}
+
 	/**
 	 * This implementation returns the underlying URL reference.
 	 */
@@ -341,8 +354,8 @@ public class UrlResource extends AbstractFileResolvingResource {
 	 * This implementation compares the underlying URL references.
 	 */
 	@Override
-	public boolean equals(@Nullable Object obj) {
-		return (this == obj || (obj instanceof UrlResource that &&
+	public boolean equals(@Nullable Object other) {
+		return (this == other || (other instanceof UrlResource that &&
 				getCleanedUrl().equals(that.getCleanedUrl())));
 	}
 

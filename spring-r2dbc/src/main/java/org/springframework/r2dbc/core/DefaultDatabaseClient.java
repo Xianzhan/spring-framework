@@ -16,6 +16,7 @@
 
 package org.springframework.r2dbc.core;
 
+import java.beans.PropertyDescriptor;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -47,7 +48,7 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import org.springframework.dao.DataAccessException;
+import org.springframework.beans.BeanUtils;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.lang.Nullable;
 import org.springframework.r2dbc.connection.ConnectionFactoryUtils;
@@ -55,18 +56,22 @@ import org.springframework.r2dbc.core.binding.BindMarkersFactory;
 import org.springframework.r2dbc.core.binding.BindTarget;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
 
 /**
- * Default implementation of {@link DatabaseClient}.
+ * The default implementation of {@link DatabaseClient},
+ * as created by the static factory method.
  *
  * @author Mark Paluch
  * @author Mingyuan Wu
  * @author Bogdan Ilchyshyn
  * @author Simon Baslé
+ * @author Juergen Hoeller
  * @since 5.3
+ * @see DatabaseClient#create(ConnectionFactory)
  */
-class DefaultDatabaseClient implements DatabaseClient {
+final class DefaultDatabaseClient implements DatabaseClient {
 
 	private final Log logger = LogFactory.getLog(getClass());
 
@@ -108,7 +113,7 @@ class DefaultDatabaseClient implements DatabaseClient {
 	}
 
 	@Override
-	public <T> Mono<T> inConnection(Function<Connection, Mono<T>> action) throws DataAccessException {
+	public <T> Mono<T> inConnection(Function<Connection, Mono<T>> action) {
 		Assert.notNull(action, "Callback object must not be null");
 		Mono<ConnectionCloseHolder> connectionMono = getConnection().map(
 				connection -> new ConnectionCloseHolder(connection, this::closeConnection));
@@ -130,7 +135,7 @@ class DefaultDatabaseClient implements DatabaseClient {
 	}
 
 	@Override
-	public <T> Flux<T> inConnectionMany(Function<Connection, Flux<T>> action) throws DataAccessException {
+	public <T> Flux<T> inConnectionMany(Function<Connection, Flux<T>> action) {
 		Assert.notNull(action, "Callback object must not be null");
 		Mono<ConnectionCloseHolder> connectionMono = getConnection().map(
 				connection -> new ConnectionCloseHolder(connection, this::closeConnection));
@@ -162,8 +167,7 @@ class DefaultDatabaseClient implements DatabaseClient {
 	/**
 	 * Release the {@link Connection}.
 	 * @param connection to close.
-	 * @return a {@link Publisher} that completes successfully when the connection is
-	 * closed
+	 * @return a {@link Publisher} that completes successfully when the connection is closed
 	 */
 	private Publisher<Void> closeConnection(Connection connection) {
 		return ConnectionFactoryUtils.currentConnectionFactory(
@@ -245,6 +249,19 @@ class DefaultDatabaseClient implements DatabaseClient {
 		}
 
 		@SuppressWarnings("deprecation")
+		private Parameter resolveParameter(Object value) {
+			if (value instanceof Parameter param) {
+				return param;
+			}
+			else if (value instanceof org.springframework.r2dbc.core.Parameter param) {
+				Object paramValue = param.getValue();
+				return (paramValue != null ? Parameters.in(paramValue) : Parameters.in(param.getType()));
+			}
+			else {
+				return Parameters.in(value);
+			}
+		}
+
 		@Override
 		public DefaultGenericExecuteSpec bind(int index, Object value) {
 			assertNotPreparedOperation();
@@ -252,15 +269,7 @@ class DefaultDatabaseClient implements DatabaseClient {
 					"Value at index %d must not be null. Use bindNull(…) instead.", index));
 
 			Map<Integer, Parameter> byIndex = new LinkedHashMap<>(this.byIndex);
-			if (value instanceof Parameter p) {
-				byIndex.put(index, p);
-			}
-			else if (value instanceof org.springframework.r2dbc.core.Parameter p) {
-				byIndex.put(index, p.hasValue() ? Parameters.in(p.getValue()) : Parameters.in(p.getType()));
-			}
-			else {
-				byIndex.put(index, Parameters.in(value));
-			}
+			byIndex.put(index, resolveParameter(value));
 
 			return new DefaultGenericExecuteSpec(byIndex, this.byName, this.sqlSupplier, this.filterFunction);
 		}
@@ -275,7 +284,6 @@ class DefaultDatabaseClient implements DatabaseClient {
 			return new DefaultGenericExecuteSpec(byIndex, this.byName, this.sqlSupplier, this.filterFunction);
 		}
 
-		@SuppressWarnings("deprecation")
 		@Override
 		public DefaultGenericExecuteSpec bind(String name, Object value) {
 			assertNotPreparedOperation();
@@ -285,15 +293,7 @@ class DefaultDatabaseClient implements DatabaseClient {
 					"Value for parameter %s must not be null. Use bindNull(…) instead.", name));
 
 			Map<String, Parameter> byName = new LinkedHashMap<>(this.byName);
-			if (value instanceof Parameter p) {
-				byName.put(name, p);
-			}
-			else if (value instanceof org.springframework.r2dbc.core.Parameter p) {
-				byName.put(name, p.hasValue() ? Parameters.in(p.getValue()) : Parameters.in(p.getType()));
-			}
-			else {
-				byName.put(name, Parameters.in(value));
-			}
+			byName.put(name, resolveParameter(value));
 
 			return new DefaultGenericExecuteSpec(this.byIndex, byName, this.sqlSupplier, this.filterFunction);
 		}
@@ -305,6 +305,34 @@ class DefaultDatabaseClient implements DatabaseClient {
 
 			Map<String, Parameter> byName = new LinkedHashMap<>(this.byName);
 			byName.put(name, Parameters.in(type));
+
+			return new DefaultGenericExecuteSpec(this.byIndex, byName, this.sqlSupplier, this.filterFunction);
+		}
+
+		@Override
+		public GenericExecuteSpec bindValues(Map<String, ?> source) {
+			assertNotPreparedOperation();
+			Assert.notNull(source, "Parameter source must not be null");
+
+			Map<String, Parameter> target = new LinkedHashMap<>(this.byName);
+			source.forEach((name, value) -> target.put(name, resolveParameter(value)));
+
+			return new DefaultGenericExecuteSpec(this.byIndex, target, this.sqlSupplier, this.filterFunction);
+		}
+
+		@Override
+		public DefaultGenericExecuteSpec bindProperties(Object source) {
+			assertNotPreparedOperation();
+			Assert.notNull(source, "Parameter source must not be null");
+
+			Map<String, Parameter> byName = new LinkedHashMap<>(this.byName);
+			for (PropertyDescriptor pd : BeanUtils.getPropertyDescriptors(source.getClass())) {
+				if (pd.getReadMethod() != null && pd.getReadMethod().getDeclaringClass() != Object.class) {
+					ReflectionUtils.makeAccessible(pd.getReadMethod());
+					Object value = ReflectionUtils.invokeMethod(pd.getReadMethod(), source);
+					byName.put(pd.getName(), (value != null ? Parameters.in(value) : Parameters.in(pd.getPropertyType())));
+				}
+			}
 
 			return new DefaultGenericExecuteSpec(this.byIndex, byName, this.sqlSupplier, this.filterFunction);
 		}
@@ -326,6 +354,18 @@ class DefaultDatabaseClient implements DatabaseClient {
 		public <R> FetchSpec<R> map(BiFunction<Row, RowMetadata, R> mappingFunction) {
 			Assert.notNull(mappingFunction, "Mapping function must not be null");
 			return execute(this.sqlSupplier, result -> result.map(mappingFunction));
+		}
+
+		@Override
+		public <R> RowsFetchSpec<R> mapValue(Class<R> mappedClass) {
+			Assert.notNull(mappedClass, "Mapped class must not be null");
+			return execute(this.sqlSupplier, result -> result.map(row -> row.get(0, mappedClass)));
+		}
+
+		@Override
+		public <R> FetchSpec<R> mapProperties(Class<R> mappedClass) {
+			Assert.notNull(mappedClass, "Mapped class must not be null");
+			return execute(this.sqlSupplier, result -> result.map(new DataClassRowMapper<R>(mappedClass)));
 		}
 
 		@Override
@@ -391,24 +431,20 @@ class DefaultDatabaseClient implements DatabaseClient {
 				return statement;
 			};
 
-			return new ResultFunction(sqlSupplier, statementFunction, this.filterFunction, DefaultDatabaseClient.this.executeFunction);
+			return new ResultFunction(sqlSupplier, statementFunction, this.filterFunction,
+					DefaultDatabaseClient.this.executeFunction);
 		}
 
 		private <T> FetchSpec<T> execute(Supplier<String> sqlSupplier, Function<Result, Publisher<T>> resultAdapter) {
 			ResultFunction resultHandler = getResultFunction(sqlSupplier);
-
-			return new DefaultFetchSpec<>(
-					DefaultDatabaseClient.this,
-					resultHandler,
-					connection -> sumRowsUpdated(resultHandler, connection),
-					resultAdapter);
+			return new DefaultFetchSpec<>(DefaultDatabaseClient.this, resultHandler,
+					connection -> sumRowsUpdated(resultHandler, connection), resultAdapter);
 		}
 
 		private <T> Flux<T> flatMap(Supplier<String> sqlSupplier, Function<Result, Publisher<T>> mappingFunction) {
 			ResultFunction resultHandler = getResultFunction(sqlSupplier);
-			ConnectionFunction<Flux<T>> connectionFunction = new DelegateConnectionFunction<>(resultHandler, cx -> resultHandler
-					.apply(cx)
-					.flatMap(mappingFunction));
+			ConnectionFunction<Flux<T>> connectionFunction = new DelegateConnectionFunction<>(resultHandler,
+					cx -> resultHandler.apply(cx).flatMap(mappingFunction));
 			return inConnectionMany(connectionFunction);
 		}
 
@@ -447,8 +483,7 @@ class DefaultDatabaseClient implements DatabaseClient {
 
 		private void assertNotPreparedOperation() {
 			if (this.sqlSupplier instanceof PreparedOperation<?>) {
-				throw new InvalidDataAccessApiUsageException(
-						"Cannot add bindings to a PreparedOperation");
+				throw new InvalidDataAccessApiUsageException("Cannot add bindings to a PreparedOperation");
 			}
 		}
 
@@ -496,8 +531,7 @@ class DefaultDatabaseClient implements DatabaseClient {
 					return this.target;
 				case "close":
 					// Handle close method: suppress, not valid.
-					return Mono.error(
-							new UnsupportedOperationException("Close is not supported!"));
+					return Mono.error(new UnsupportedOperationException("Close is not supported!"));
 			}
 
 			// Invoke method on target Connection.

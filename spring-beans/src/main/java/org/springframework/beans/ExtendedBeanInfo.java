@@ -192,14 +192,14 @@ class ExtendedBeanInfo implements BeanInfo {
 			if (pd instanceof IndexedPropertyDescriptor indexedPd) {
 				candidateType = indexedPd.getIndexedPropertyType();
 				if (candidateName.equals(propertyName) &&
-						(candidateType.equals(propertyType) || candidateType.equals(propertyType.getComponentType()))) {
+						(candidateType.equals(propertyType) || candidateType.equals(propertyType.componentType()))) {
 					return pd;
 				}
 			}
 			else {
 				candidateType = pd.getPropertyType();
 				if (candidateName.equals(propertyName) &&
-						(candidateType.equals(propertyType) || propertyType.equals(candidateType.getComponentType()))) {
+						(candidateType.equals(propertyType) || propertyType.equals(candidateType.componentType()))) {
 					return pd;
 				}
 			}
@@ -338,8 +338,8 @@ class ExtendedBeanInfo implements BeanInfo {
 		}
 
 		@Override
-		public boolean equals(@Nullable Object obj) {
-			return (this == obj || (obj instanceof PropertyDescriptor that &&
+		public boolean equals(@Nullable Object other) {
+			return (this == other || (other instanceof PropertyDescriptor that &&
 					PropertyDescriptorUtils.equals(this, that)));
 		}
 

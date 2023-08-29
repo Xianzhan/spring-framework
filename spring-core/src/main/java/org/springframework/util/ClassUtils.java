@@ -20,7 +20,6 @@ import java.io.Closeable;
 import java.io.Externalizable;
 import java.io.File;
 import java.io.Serializable;
-import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -64,6 +63,7 @@ import org.springframework.lang.Nullable;
  * @author Keith Donald
  * @author Rob Harrop
  * @author Sam Brannen
+ * @author Sebastien Deleuze
  * @since 1.1
  * @see TypeUtils
  * @see ReflectionUtils
@@ -96,6 +96,12 @@ public abstract class ClassUtils {
 
 	/** The ".class" file suffix. */
 	public static final String CLASS_FILE_SUFFIX = ".class";
+
+	/** Precomputed value for the combination of private, static and final modifiers. */
+	private static final int NON_OVERRIDABLE_MODIFIER = Modifier.PRIVATE | Modifier.STATIC | Modifier.FINAL;
+
+	/** Precomputed value for the combination of public and protected modifiers. */
+	private static final int OVERRIDABLE_MODIFIER = Modifier.PUBLIC | Modifier.PROTECTED;
 
 
 	/**
@@ -273,21 +279,21 @@ public abstract class ClassUtils {
 		if (name.endsWith(ARRAY_SUFFIX)) {
 			String elementClassName = name.substring(0, name.length() - ARRAY_SUFFIX.length());
 			Class<?> elementClass = forName(elementClassName, classLoader);
-			return Array.newInstance(elementClass, 0).getClass();
+			return elementClass.arrayType();
 		}
 
 		// "[Ljava.lang.String;" style arrays
 		if (name.startsWith(NON_PRIMITIVE_ARRAY_PREFIX) && name.endsWith(";")) {
 			String elementName = name.substring(NON_PRIMITIVE_ARRAY_PREFIX.length(), name.length() - 1);
 			Class<?> elementClass = forName(elementName, classLoader);
-			return Array.newInstance(elementClass, 0).getClass();
+			return elementClass.arrayType();
 		}
 
 		// "[[I" or "[[Ljava.lang.String;" style arrays
 		if (name.startsWith(INTERNAL_ARRAY_PREFIX)) {
 			String elementName = name.substring(INTERNAL_ARRAY_PREFIX.length());
 			Class<?> elementClass = forName(elementName, classLoader);
-			return Array.newInstance(elementClass, 0).getClass();
+			return elementClass.arrayType();
 		}
 
 		ClassLoader clToUse = classLoader;
@@ -517,7 +523,7 @@ public abstract class ClassUtils {
 	 */
 	public static boolean isPrimitiveArray(Class<?> clazz) {
 		Assert.notNull(clazz, "Class must not be null");
-		return (clazz.isArray() && clazz.getComponentType().isPrimitive());
+		return (clazz.isArray() && clazz.componentType().isPrimitive());
 	}
 
 	/**
@@ -528,7 +534,7 @@ public abstract class ClassUtils {
 	 */
 	public static boolean isPrimitiveWrapperArray(Class<?> clazz) {
 		Assert.notNull(clazz, "Class must not be null");
-		return (clazz.isArray() && isPrimitiveWrapper(clazz.getComponentType()));
+		return (clazz.isArray() && isPrimitiveWrapper(clazz.componentType()));
 	}
 
 	/**
@@ -1449,10 +1455,10 @@ public abstract class ClassUtils {
 	 * @param targetClass the target class to check against
 	 */
 	private static boolean isOverridable(Method method, @Nullable Class<?> targetClass) {
-		if (Modifier.isPrivate(method.getModifiers())) {
+		if ((method.getModifiers() & NON_OVERRIDABLE_MODIFIER) != 0) {
 			return false;
 		}
-		if (Modifier.isPublic(method.getModifiers()) || Modifier.isProtected(method.getModifiers())) {
+		if ((method.getModifiers() & OVERRIDABLE_MODIFIER) != 0) {
 			return true;
 		}
 		return (targetClass == null ||
@@ -1473,7 +1479,7 @@ public abstract class ClassUtils {
 		Assert.notNull(methodName, "Method name must not be null");
 		try {
 			Method method = clazz.getMethod(methodName, args);
-			return Modifier.isStatic(method.getModifiers()) ? method : null;
+			return (Modifier.isStatic(method.getModifiers()) ? method : null);
 		}
 		catch (NoSuchMethodException ex) {
 			return null;

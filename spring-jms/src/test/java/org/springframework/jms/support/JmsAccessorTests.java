@@ -18,6 +18,8 @@ package org.springframework.jms.support;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import jakarta.jms.Session;
@@ -27,7 +29,6 @@ import org.springframework.util.ReflectionUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
@@ -84,15 +85,32 @@ class JmsAccessorTests {
 	 */
 	@Test
 	void setSessionAcknowledgeModeNameToAllSupportedValues() {
+		Set<Integer> uniqueValues = new HashSet<>();
 		streamAcknowledgeModeConstants()
-				.map(Field::getName)
-				.forEach(name -> assertThatNoException().isThrownBy(() -> accessor.setSessionAcknowledgeModeName(name)));
+				.forEach(name -> {
+					accessor.setSessionAcknowledgeModeName(name);
+					int sessionAcknowledgeMode = accessor.getSessionAcknowledgeMode();
+					assertThat(sessionAcknowledgeMode).isBetween(0, 3);
+					uniqueValues.add(sessionAcknowledgeMode);
+				});
+		assertThat(uniqueValues).hasSize(4);
 	}
 
+	@Test
+	void setSessionAcknowledgeMode() {
+		assertThatIllegalArgumentException().isThrownBy(() -> accessor.setSessionAcknowledgeMode(999));
 
-	private static Stream<Field> streamAcknowledgeModeConstants() {
-		return Arrays.stream(Session.class.getFields())
-				.filter(ReflectionUtils::isPublicStaticFinal);
+		accessor.setSessionAcknowledgeMode(Session.AUTO_ACKNOWLEDGE);
+		assertThat(accessor.getSessionAcknowledgeMode()).isEqualTo(Session.AUTO_ACKNOWLEDGE);
+
+		accessor.setSessionAcknowledgeMode(Session.CLIENT_ACKNOWLEDGE);
+		assertThat(accessor.getSessionAcknowledgeMode()).isEqualTo(Session.CLIENT_ACKNOWLEDGE);
+
+		accessor.setSessionAcknowledgeMode(Session.DUPS_OK_ACKNOWLEDGE);
+		assertThat(accessor.getSessionAcknowledgeMode()).isEqualTo(Session.DUPS_OK_ACKNOWLEDGE);
+
+		accessor.setSessionAcknowledgeMode(Session.SESSION_TRANSACTED);
+		assertThat(accessor.getSessionAcknowledgeMode()).isEqualTo(Session.SESSION_TRANSACTED);
 	}
 
 	@Test
@@ -100,6 +118,13 @@ class JmsAccessorTests {
 		Session session = mock();
 		given(session.getAcknowledgeMode()).willReturn(100);
 		assertThat(accessor.isClientAcknowledge(session)).isTrue();
+	}
+
+
+	private static Stream<String> streamAcknowledgeModeConstants() {
+		return Arrays.stream(Session.class.getFields())
+				.filter(ReflectionUtils::isPublicStaticFinal)
+				.map(Field::getName);
 	}
 
 }
