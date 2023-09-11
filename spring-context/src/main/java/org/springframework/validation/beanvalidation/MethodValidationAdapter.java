@@ -133,11 +133,19 @@ public class MethodValidationAdapter implements MethodValidator {
 	}
 
 	private static Supplier<SpringValidatorAdapter> initValidatorAdapter(Supplier<Validator> validatorSupplier) {
-		Validator validator = validatorSupplier.get();
-		return (validator instanceof SpringValidatorAdapter validatorAdapter ?
-				(() -> validatorAdapter) : SingletonSupplier.of(() -> new SpringValidatorAdapter(validator)));
+		return SingletonSupplier.of(() -> {
+			Validator validator = validatorSupplier.get();
+			return (validator instanceof SpringValidatorAdapter sva ? sva : new SpringValidatorAdapter(validator));
+		});
 	}
 
+
+	/**
+	 * Return the {@link SpringValidatorAdapter} configured for use.
+	 */
+	public Supplier<SpringValidatorAdapter> getSpringValidatorAdapter() {
+		return this.validatorAdapter;
+	}
 
 	/**
 	 * Set the strategy to use to determine message codes for violations.

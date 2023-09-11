@@ -28,6 +28,8 @@ import javax.sql.DataSource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.core.PreparedStatementCreatorFactory;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
@@ -203,18 +205,18 @@ final class DefaultJdbcClient implements JdbcClient {
 		@Override
 		public void query(RowCallbackHandler rch) {
 			if (useNamedParams()) {
-				namedParamOps.query(this.sql, this.namedParams, rch);
+				namedParamOps.query(this.sql, this.namedParamSource, rch);
 			}
 			else {
-				classicOps.query(this.sql, rch, this.indexedParams.toArray());
+				classicOps.query(getPreparedStatementCreatorForIndexedParams(), rch);
 			}
 		}
 
 		@Override
 		public <T> T query(ResultSetExtractor<T> rse) {
 			T result = (useNamedParams() ?
-					namedParamOps.query(this.sql, this.namedParams, rse) :
-					classicOps.query(this.sql, rse, this.indexedParams.toArray()));
+					namedParamOps.query(this.sql, this.namedParamSource, rse) :
+					classicOps.query(getPreparedStatementCreatorForIndexedParams(), rse));
 			Assert.state(result != null, "No result from ResultSetExtractor");
 			return result;
 		}
@@ -223,14 +225,14 @@ final class DefaultJdbcClient implements JdbcClient {
 		public int update() {
 			return (useNamedParams() ?
 					namedParamOps.update(this.sql, this.namedParamSource) :
-					classicOps.update(this.sql, this.indexedParams.toArray()));
+					classicOps.update(getPreparedStatementCreatorForIndexedParams()));
 		}
 
 		@Override
 		public int update(KeyHolder generatedKeyHolder) {
 			return (useNamedParams() ?
 					namedParamOps.update(this.sql, this.namedParamSource, generatedKeyHolder) :
-					classicOps.update(this.sql, this.indexedParams.toArray(), generatedKeyHolder));
+					classicOps.update(getPreparedStatementCreatorForIndexedParams(), generatedKeyHolder));
 		}
 
 		private boolean useNamedParams() {
@@ -243,6 +245,10 @@ final class DefaultJdbcClient implements JdbcClient {
 						"Configure either individual named parameters or a SqlParameterSource, not both");
 			}
 			return hasNamedParams;
+		}
+
+		private PreparedStatementCreator getPreparedStatementCreatorForIndexedParams() {
+			return new PreparedStatementCreatorFactory(this.sql).newPreparedStatementCreator(this.indexedParams);
 		}
 
 
