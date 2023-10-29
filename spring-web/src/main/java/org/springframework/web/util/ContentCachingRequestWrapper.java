@@ -17,7 +17,6 @@
 package org.springframework.web.util;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URLEncoder;
@@ -36,6 +35,7 @@ import jakarta.servlet.http.HttpServletRequestWrapper;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.lang.Nullable;
+import org.springframework.util.FastByteArrayOutputStream;
 
 /**
  * {@link jakarta.servlet.http.HttpServletRequest} wrapper that caches all content read from
@@ -56,7 +56,7 @@ import org.springframework.lang.Nullable;
  */
 public class ContentCachingRequestWrapper extends HttpServletRequestWrapper {
 
-	private final ByteArrayOutputStream cachedContent;
+	private final FastByteArrayOutputStream cachedContent = new FastByteArrayOutputStream();
 
 	@Nullable
 	private final Integer contentCacheLimit;
@@ -74,8 +74,6 @@ public class ContentCachingRequestWrapper extends HttpServletRequestWrapper {
 	 */
 	public ContentCachingRequestWrapper(HttpServletRequest request) {
 		super(request);
-		int contentLength = request.getContentLength();
-		this.cachedContent = new ByteArrayOutputStream(contentLength >= 0 ? contentLength : 1024);
 		this.contentCacheLimit = null;
 	}
 
@@ -88,7 +86,6 @@ public class ContentCachingRequestWrapper extends HttpServletRequestWrapper {
 	 */
 	public ContentCachingRequestWrapper(HttpServletRequest request, int contentCacheLimit) {
 		super(request);
-		this.cachedContent = new ByteArrayOutputStream(contentCacheLimit);
 		this.contentCacheLimit = contentCacheLimit;
 	}
 
@@ -208,7 +205,7 @@ public class ContentCachingRequestWrapper extends HttpServletRequestWrapper {
 	 * @see #getContentAsByteArray()
 	 */
 	public String getContentAsString() {
-		return this.cachedContent.toString(Charset.forName(getCharacterEncoding()));
+		return new String(this.cachedContent.toByteArray(), Charset.forName(getCharacterEncoding()));
 	}
 
 	/**
@@ -257,7 +254,7 @@ public class ContentCachingRequestWrapper extends HttpServletRequestWrapper {
 			return count;
 		}
 
-		private void writeToCache(final byte[] b, final int off, int count) {
+		private void writeToCache(final byte[] b, final int off, int count) throws IOException{
 			if (!this.overflow && count > 0) {
 				if (contentCacheLimit != null &&
 						count + cachedContent.size() > contentCacheLimit) {

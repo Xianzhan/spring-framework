@@ -275,6 +275,10 @@ public abstract class AbstractJdbcInsert {
 			if (getTableName() == null) {
 				throw new InvalidDataAccessApiUsageException("Table name is required");
 			}
+			if (isQuoteIdentifiers() && this.declaredColumns.isEmpty()) {
+				throw new InvalidDataAccessApiUsageException(
+						"Explicit column names must be provided when using quoted identifiers");
+			}
 			try {
 				this.jdbcTemplate.afterPropertiesSet();
 			}
@@ -474,7 +478,7 @@ public abstract class AbstractJdbcInsert {
 			if (getGeneratedKeyNames().length > 1) {
 				throw new InvalidDataAccessApiUsageException(
 						"Current database only supports retrieving the key for a single column. There are " +
-						getGeneratedKeyNames().length  + " columns specified: " + Arrays.toString(getGeneratedKeyNames()));
+						getGeneratedKeyNames().length + " columns specified: " + Arrays.toString(getGeneratedKeyNames()));
 			}
 
 			Assert.state(getTableName() != null, "No table name set");

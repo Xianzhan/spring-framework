@@ -129,14 +129,13 @@ public abstract class ClassFilters {
 
 		@Override
 		public int hashCode() {
-			return ObjectUtils.nullSafeHashCode(this.filters);
+			return Arrays.hashCode(this.filters);
 		}
 
 		@Override
 		public String toString() {
 			return getClass().getName() + ": " + Arrays.toString(this.filters);
 		}
-
 	}
 
 
@@ -170,14 +169,13 @@ public abstract class ClassFilters {
 
 		@Override
 		public int hashCode() {
-			return ObjectUtils.nullSafeHashCode(this.filters);
+			return Arrays.hashCode(this.filters);
 		}
 
 		@Override
 		public String toString() {
 			return getClass().getName() + ": " + Arrays.toString(this.filters);
 		}
-
 	}
 
 
@@ -213,7 +211,6 @@ public abstract class ClassFilters {
 		public String toString() {
 			return "Negate " + this.original;
 		}
-
 	}
 
 }

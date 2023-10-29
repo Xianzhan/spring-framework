@@ -106,6 +106,7 @@ final class DefaultJdbcClient implements JdbcClient {
 
 		@Override
 		public StatementSpec param(@Nullable Object value) {
+			validateIndexedParamValue(value);
 			this.indexedParams.add(value);
 			return this;
 		}
@@ -115,6 +116,7 @@ final class DefaultJdbcClient implements JdbcClient {
 			if (jdbcIndex < 1) {
 				throw new IllegalArgumentException("Invalid JDBC index: needs to start at 1");
 			}
+			validateIndexedParamValue(value);
 			int index = jdbcIndex - 1;
 			int size = this.indexedParams.size();
 			if (index < size) {
@@ -127,6 +129,14 @@ final class DefaultJdbcClient implements JdbcClient {
 				this.indexedParams.add(value);
 			}
 			return this;
+		}
+
+		private void validateIndexedParamValue(@Nullable Object value) {
+			if (value instanceof Iterable) {
+				throw new IllegalArgumentException("Invalid positional parameter value of type Iterable (" +
+						value.getClass().getSimpleName() +
+						"): Parameter expansion is only supported with named parameters.");
+			}
 		}
 
 		@Override
@@ -232,7 +242,7 @@ final class DefaultJdbcClient implements JdbcClient {
 		public int update(KeyHolder generatedKeyHolder) {
 			return (useNamedParams() ?
 					namedParamOps.update(this.sql, this.namedParamSource, generatedKeyHolder) :
-					classicOps.update(getPreparedStatementCreatorForIndexedParams(), generatedKeyHolder));
+					classicOps.update(getPreparedStatementCreatorForIndexedParams(true), generatedKeyHolder));
 		}
 
 		private boolean useNamedParams() {
@@ -248,7 +258,13 @@ final class DefaultJdbcClient implements JdbcClient {
 		}
 
 		private PreparedStatementCreator getPreparedStatementCreatorForIndexedParams() {
-			return new PreparedStatementCreatorFactory(this.sql).newPreparedStatementCreator(this.indexedParams);
+			return getPreparedStatementCreatorForIndexedParams(false);
+		}
+
+		private PreparedStatementCreator getPreparedStatementCreatorForIndexedParams(boolean returnGeneratedKeys) {
+			PreparedStatementCreatorFactory factory = new PreparedStatementCreatorFactory(this.sql);
+			factory.setReturnGeneratedKeys(returnGeneratedKeys);
+			return factory.newPreparedStatementCreator(this.indexedParams);
 		}
 
 
@@ -269,10 +285,9 @@ final class DefaultJdbcClient implements JdbcClient {
 				return classicOps.queryForMap(sql, indexedParams.toArray());
 			}
 
-			@SuppressWarnings("unchecked")
 			@Override
-			public <T> List<T> singleColumn() {
-				return (List<T>) classicOps.queryForList(sql, Object.class, indexedParams.toArray());
+			public List<Object> singleColumn() {
+				return classicOps.queryForList(sql, Object.class, indexedParams.toArray());
 			}
 		}
 
@@ -294,10 +309,9 @@ final class DefaultJdbcClient implements JdbcClient {
 				return namedParamOps.queryForMap(sql, namedParamSource);
 			}
 
-			@SuppressWarnings("unchecked")
 			@Override
-			public <T> List<T> singleColumn() {
-				return (List<T>) namedParamOps.queryForList(sql, namedParamSource, Object.class);
+			public List<Object> singleColumn() {
+				return namedParamOps.queryForList(sql, namedParamSource, Object.class);
 			}
 		}
 

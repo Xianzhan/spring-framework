@@ -16,10 +16,10 @@
 
 package org.springframework.jms.listener;
 
-import io.micrometer.core.instrument.binder.jms.DefaultJmsProcessObservationConvention;
-import io.micrometer.core.instrument.binder.jms.JmsObservationDocumentation;
-import io.micrometer.core.instrument.binder.jms.JmsProcessObservationContext;
-import io.micrometer.core.instrument.binder.jms.JmsProcessObservationConvention;
+import io.micrometer.jakarta9.instrument.jms.DefaultJmsProcessObservationConvention;
+import io.micrometer.jakarta9.instrument.jms.JmsObservationDocumentation;
+import io.micrometer.jakarta9.instrument.jms.JmsProcessObservationContext;
+import io.micrometer.jakarta9.instrument.jms.JmsProcessObservationConvention;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import jakarta.jms.Connection;
@@ -150,8 +150,8 @@ import org.springframework.util.ErrorHandler;
 public abstract class AbstractMessageListenerContainer extends AbstractJmsListeningContainer
 		implements MessageListenerContainer {
 
-	private static final boolean micrometerCorePresent = ClassUtils.isPresent(
-			"io.micrometer.core.instrument.binder.jms.JmsInstrumentation", AbstractMessageListenerContainer.class.getClassLoader());
+	private static final boolean micrometerJakartaPresent = ClassUtils.isPresent(
+			"io.micrometer.jakarta9.instrument.jms.JmsInstrumentation", AbstractMessageListenerContainer.class.getClassLoader());
 
 	@Nullable
 	private volatile Object destination;
@@ -576,16 +576,6 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	}
 
 	/**
-	 * Return the {@link ObservationRegistry} used for recording
-	 * {@link JmsObservationDocumentation#JMS_MESSAGE_PROCESS JMS message processing observations}.
-	 * @since 6.1
-	 */
-	@Nullable
-	public ObservationRegistry getObservationRegistry() {
-		return this.observationRegistry;
-	}
-
-	/**
 	 * Set the {@link ObservationRegistry} to be used for recording
 	 * {@link JmsObservationDocumentation#JMS_MESSAGE_PROCESS JMS message processing observations}.
 	 * Defaults to no-op observations if the registry is not set.
@@ -593,6 +583,16 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 */
 	public void setObservationRegistry(@Nullable ObservationRegistry observationRegistry) {
 		this.observationRegistry = observationRegistry;
+	}
+
+	/**
+	 * Return the {@link ObservationRegistry} used for recording
+	 * {@link JmsObservationDocumentation#JMS_MESSAGE_PROCESS JMS message processing observations}.
+	 * @since 6.1
+	 */
+	@Nullable
+	public ObservationRegistry getObservationRegistry() {
+		return this.observationRegistry;
 	}
 
 	/**
@@ -716,7 +716,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	}
 
 	private Observation createObservation(Message message) {
-		if (micrometerCorePresent && this.observationRegistry != null) {
+		if (micrometerJakartaPresent && this.observationRegistry != null) {
 			return ObservationFactory.create(this.observationRegistry, message);
 		}
 		else {
@@ -991,7 +991,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	private static class MessageRejectedWhileStoppingException extends RuntimeException {
 	}
 
-	private static abstract class ObservationFactory {
+	private abstract static class ObservationFactory {
 
 		private static final JmsProcessObservationConvention DEFAULT_CONVENTION = new DefaultJmsProcessObservationConvention();
 

@@ -38,12 +38,7 @@ import org.aspectj.lang.annotation.DeclareParents;
 import org.aspectj.lang.annotation.DeclarePrecedence;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import test.aop.DefaultLockable;
-import test.aop.Lockable;
-import test.aop.PerTargetAspect;
-import test.aop.TwoAdviceAspect;
 
 import org.springframework.aop.Advisor;
 import org.springframework.aop.framework.Advised;
@@ -51,6 +46,10 @@ import org.springframework.aop.framework.AopConfigException;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.aop.interceptor.ExposeInvocationInterceptor;
 import org.springframework.aop.support.AopUtils;
+import org.springframework.aop.testfixture.aspectj.PerTargetAspect;
+import org.springframework.aop.testfixture.aspectj.TwoAdviceAspect;
+import org.springframework.aop.testfixture.mixin.DefaultLockable;
+import org.springframework.aop.testfixture.mixin.Lockable;
 import org.springframework.beans.testfixture.beans.ITestBean;
 import org.springframework.beans.testfixture.beans.TestBean;
 import org.springframework.core.OrderComparator;
@@ -389,9 +388,7 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 		assertThat(lockable.locked()).isTrue();
 	}
 
-	// TODO: Why does this test fail? It hasn't been run before, so it maybe never actually passed...
 	@Test
-	@Disabled
 	void introductionWithArgumentBinding() {
 		TestBean target = new TestBean();
 
@@ -459,10 +456,10 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 		assertThat(advisors).as("Two advice methods found").hasSize(2);
 		ITestBean itb = createProxy(target, ITestBean.class, advisors);
 		itb.setName("");
-		assertThat(itb.getAge()).isEqualTo(0);
+		assertThat(itb.age()).isEqualTo(0);
 		int newAge = 32;
 		itb.setAge(newAge);
-		assertThat(itb.getAge()).isEqualTo(1);
+		assertThat(itb.age()).isEqualTo(1);
 	}
 
 	@Test

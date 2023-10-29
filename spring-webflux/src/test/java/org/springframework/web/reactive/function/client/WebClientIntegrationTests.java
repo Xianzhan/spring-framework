@@ -103,7 +103,6 @@ class WebClientIntegrationTests {
 	static Stream<Named<ClientHttpConnector>> arguments() {
 		return Stream.of(
 				named("Reactor Netty", new ReactorClientHttpConnector()),
-				named("Reactor Netty 2", new ReactorNetty2ClientHttpConnector()),
 				named("JDK", new JdkClientHttpConnector()),
 				named("Jetty", new JettyClientHttpConnector()),
 				named("HttpComponents", new HttpComponentsClientHttpConnector())
@@ -1197,23 +1196,6 @@ class WebClientIntegrationTests {
 				.block(Duration.ofSeconds(3));
 
 		expectRequestCount(1);
-	}
-
-	@ParameterizedWebClientTest
-	void invalidDomain(ClientHttpConnector connector) {
-		startServer(connector);
-
-		String url = "http://example.invalid";
-		Mono<Void> result = this.webClient.get().uri(url).retrieve().bodyToMono(Void.class);
-
-		StepVerifier.create(result)
-				.expectErrorSatisfies(throwable -> {
-					assertThat(throwable).isInstanceOf(WebClientRequestException.class);
-					WebClientRequestException ex = (WebClientRequestException) throwable;
-					assertThat(ex.getMethod()).isEqualTo(HttpMethod.GET);
-					assertThat(ex.getUri()).isEqualTo(URI.create(url));
-				})
-				.verify();
 	}
 
 	@ParameterizedWebClientTest

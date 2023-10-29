@@ -20,6 +20,7 @@ import java.lang.annotation.Annotation;
 import java.lang.annotation.Repeatable;
 import java.lang.reflect.Method;
 import java.util.Map;
+import java.util.Objects;
 
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
@@ -42,6 +43,8 @@ import org.springframework.util.ObjectUtils;
  * @since 5.2
  */
 public abstract class RepeatableContainers {
+
+	static final Map<Class<? extends Annotation>, Object> cache = new ConcurrentReferenceHashMap<>();
 
 	@Nullable
 	private final RepeatableContainers parent;
@@ -89,7 +92,7 @@ public abstract class RepeatableContainers {
 
 	@Override
 	public int hashCode() {
-		return ObjectUtils.nullSafeHashCode(this.parent);
+		return Objects.hashCode(this.parent);
 	}
 
 
@@ -140,8 +143,6 @@ public abstract class RepeatableContainers {
 	 * Java's {@link Repeatable @Repeatable} annotation.
 	 */
 	private static class StandardRepeatableContainers extends RepeatableContainers {
-
-		private static final Map<Class<? extends Annotation>, Object> cache = new ConcurrentReferenceHashMap<>();
 
 		private static final Object NONE = new Object();
 

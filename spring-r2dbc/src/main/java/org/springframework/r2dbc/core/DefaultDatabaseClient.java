@@ -170,9 +170,8 @@ final class DefaultDatabaseClient implements DatabaseClient {
 	 * @return a {@link Publisher} that completes successfully when the connection is closed
 	 */
 	private Publisher<Void> closeConnection(Connection connection) {
-		return ConnectionFactoryUtils.currentConnectionFactory(
-				obtainConnectionFactory()).then().onErrorResume(Exception.class,
-						e -> Mono.from(connection.close()));
+		return ConnectionFactoryUtils.currentConnectionFactory(obtainConnectionFactory()).then()
+				.onErrorResume(Exception.class, ex -> Mono.from(connection.close()));
 	}
 
 	/**
@@ -191,7 +190,7 @@ final class DefaultDatabaseClient implements DatabaseClient {
 	 */
 	private static Connection createConnectionProxy(Connection con) {
 		return (Connection) Proxy.newProxyInstance(DatabaseClient.class.getClassLoader(),
-				new Class<?>[] { Connection.class, Wrapped.class },
+				new Class<?>[] {Connection.class, Wrapped.class},
 				new CloseSuppressingInvocationHandler(con));
 	}
 

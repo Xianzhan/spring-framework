@@ -29,16 +29,16 @@ import reactor.netty.http.client.HttpClientRequest;
 import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.resources.LoopResources;
 
-import org.springframework.context.Lifecycle;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.client.ReactorResourceFactory;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 /**
  * Reactor-Netty implementation of {@link ClientHttpConnector}.
  *
- * <p>This class implements {@link Lifecycle} and can be optionally declared
+ * <p>This class implements {@link SmartLifecycle} and can be optionally declared
  * as a Spring-managed bean.
  *
  * @author Brian Clozel
@@ -51,7 +51,7 @@ public class ReactorClientHttpConnector implements ClientHttpConnector, SmartLif
 
 	private static final Log logger = LogFactory.getLog(ReactorClientHttpConnector.class);
 
-	private final static Function<HttpClient, HttpClient> defaultInitializer = client -> client.compress(true);
+	private static final Function<HttpClient, HttpClient> defaultInitializer = client -> client.compress(true);
 
 
 	private HttpClient httpClient;
@@ -90,7 +90,9 @@ public class ReactorClientHttpConnector implements ClientHttpConnector, SmartLif
 	 * fixed, shared resources are favored for event loop concurrency. However,
 	 * consider declaring a {@link ReactorResourceFactory} bean with
 	 * {@code globalResources=true} in order to ensure the Reactor Netty global
-	 * resources are shut down when the Spring ApplicationContext is closed.
+	 * resources are shut down when the Spring ApplicationContext is stopped or closed
+	 * and restarted properly when the Spring ApplicationContext is
+	 * (with JVM Checkpoint Restore for example).
 	 * @param resourceFactory the resource factory to obtain the resources from
 	 * @param mapper a mapper for further initialization of the created client
 	 * @since 5.1
@@ -139,7 +141,7 @@ public class ReactorClientHttpConnector implements ClientHttpConnector, SmartLif
 		HttpClient.RequestSender requestSender = this.httpClient
 				.request(io.netty.handler.codec.http.HttpMethod.valueOf(method.name()));
 
-		requestSender = (uri.isAbsolute() ? requestSender.uri(uri) : requestSender.uri(uri.toString()));
+		requestSender = setUri(requestSender, uri);
 
 		return requestSender
 				.send((request, outbound) -> requestCallback.apply(adaptRequest(method, uri, request, outbound)))
@@ -154,6 +156,18 @@ public class ReactorClientHttpConnector implements ClientHttpConnector, SmartLif
 						response.releaseAfterCancel(method);
 					}
 				});
+	}
+
+	private static HttpClient.RequestSender setUri(HttpClient.RequestSender requestSender, URI uri) {
+		if (uri.isAbsolute()) {
+			try {
+				return requestSender.uri(uri);
+			}
+			catch (Exception ex) {
+				// Fall back on passing it in as a String
+			}
+		}
+		return requestSender.uri(uri.toString());
 	}
 
 	private ReactorClientHttpRequest adaptRequest(HttpMethod method, URI uri, HttpClientRequest request,

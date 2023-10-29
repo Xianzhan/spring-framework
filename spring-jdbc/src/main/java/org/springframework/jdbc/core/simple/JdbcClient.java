@@ -46,7 +46,7 @@ import org.springframework.lang.Nullable;
  * <pre class="code">
  * Optional&lt;Integer&gt; value = client.sql("SELECT AGE FROM CUSTOMER WHERE ID = :id")
  *     .param("id", 3)
- *     .query((rs, rowNum) -> rs.getInt(1))
+ *     .query(Integer.class)
  *     .optional();
  * </pre>
  *
@@ -323,17 +323,16 @@ public interface JdbcClient {
 		 * Retrieve a single column result,
 		 * retaining the order from the original database result.
 		 * @return a (potentially empty) list of rows, with each
-		 * row represented as a column value of the given type
+		 * row represented as its single column value
 		 */
-		<T> List<T> singleColumn();
+		List<Object> singleColumn();
 
 		/**
 		 * Retrieve a single value result.
-		 * @return the single row represented as its single
-		 * column value of the given type
+		 * @return the single row represented as its single column value
 		 * @see DataAccessUtils#requiredSingleResult(Collection)
 		 */
-		default <T> T singleValue() {
+		default Object singleValue() {
 			return DataAccessUtils.requiredSingleResult(singleColumn());
 		}
 	}
